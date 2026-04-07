@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexaBank-ARIA | AI-Powered Banking Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 1.8rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+        
+        .nav-links a {
+            color: #333;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        
+        .nav-links a:hover {
+            color: #667eea;
+        }
+        
+        .container {
+            flex: 1;
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+            width: 100%;
+        }
+        
+        .hero {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+        }
+        
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .hero p {
+            font-size: 1.3rem;
+            opacity: 0.95;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .card-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-right: 1rem;
+        }
+        
+        .icon-balance {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .icon-ai {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .icon-transactions {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        
+        .card h2 {
+            color: #333;
+            font-size: 1.3rem;
+        }
+        
+        .balance {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #667eea;
+            margin: 1rem 0;
+        }
+        
+        .ai-insights {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .insight-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .insight-item:last-child {
+            border-bottom: none;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.8rem 2rem;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .transaction-list {
+            margin-top: 1rem;
+        }
+        
+        .transaction-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .transaction-amount {
+            font-weight: bold;
+        }
+        
+        .amount-positive {
+            color: #28a745;
+        }
+        
+        .amount-negative {
+            color: #dc3545;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .feature-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        
+        .feature-card h3 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        
+        .footer {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1.5rem 2rem;
+            text-align: center;
+            margin-top: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">🏦 NexaBank-ARIA</div>
+            <ul class="nav-links">
+                <li><a href="#">Dashboard</a></li>
+                <li><a href="#">Accounts</a></li>
+                <li><a href="#">Transfers</a></li>
+                <li><a href="#">AI Assistant</a></li>
+                <li><a href="#">Settings</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="hero">
+            <h1>Welcome to NexaBank-ARIA</h1>
+            <p>Your AI-Powered Banking Experience</p>
+        </div>
+
+        <div class="dashboard">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon icon-balance">💰</div>
+                    <h2>Account Balance</h2>
+                </div>
+                <div class="balance">$24,567.89</div>
+                <p style="color: #28a745; font-size: 0.9rem;">↗ +2.3% this month</p>
+                <button class="btn" style="margin-top: 1rem;">Transfer Money</button>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon icon-ai">🤖</div>
+                    <h2>AI Financial Insights</h2>
+                </div>
+                <div class="ai-insights">
+                    <div class="insight-item">
+                        <strong>💡 Spending Tip:</strong> You're spending 15% more on dining this month
+                    </div>
+                    <div class="insight-item">
+                        <strong>📊 Prediction:</strong> You'll save $450 by month end
+                    </div>
+                    <div class="insight-item">
+                        <strong>🎯 Goal:</strong> 68% towards your $10,000 savings goal
+                    </div>
+                </div>
+                <button class="btn" style="margin-top: 1rem;">Ask AI Assistant</button>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon icon-transactions">📝</div>
+                    <h2>Recent Transactions</h2>
+                </div>
+                <div class="transaction-list">
+                    <div class="transaction-item">
+                        <span>Amazon Purchase</span>
+                        <span class="transaction-amount amount-negative">-$45.99</span>
+                    </div>
+                    <div class="transaction-item">
+                        <span>Salary Deposit</span>
+                        <span class="transaction-amount amount-positive">+$3,250.00</span>
+                    </div>
+                    <div class="transaction-item">
+                        <span>Grocery Store</span>
+                        <span class="transaction-amount amount-negative">-$87.43</span>
+                    </div>
+                    <div class="transaction-item">
+                        <span>Investment Return</span>
+                        <span class="transaction-amount amount-positive">+$125.50</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <h3>🔒 Secure Banking</h3>
+                <p>Bank-grade encryption and biometric authentication</p>
+            </div>
+            <div class="feature-card">
+                <h3>🤖 AI-Powered</h3>
+                <p>Smart insights and personalized financial advice</p>
+            </div>
+            <div class="feature-card">
+                <h3>⚡ Instant Transfers</h3>
+                <p>Send money anywhere in seconds</p>
+            </div>
+            <div class="feature-card">
+                <h3>📱 Mobile First</h3>
+                <p>Fully responsive design for all devices</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>&copy; 2024 NexaBank-ARIA. All rights reserved. | Powered by AI</p>
+    </div>
+</body>
+</html>
