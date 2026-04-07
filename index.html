@@ -361,6 +361,7 @@ const S = {
   pendingFinal:    '',     // accumulated final transcript during a listen session
   vadSpeechDetected: false,
   vadSilenceStart:   null,
+    pendingTransaction: null,  // stores incomplete transaction details
 };
 
 document.getElementById('sessionId').textContent = S.sessionId;
@@ -474,7 +475,77 @@ function respond(text){
 }
 
 // ─── PROCESS INPUT ────────────────────────────────────────
-function processInput(text){
+function 478
+{
+
+    // Check for cancel transaction commands
+  const cancelWords = /cancel|stop|do not proceed|don'?t proceed/i;
+  if(cancelWords.test(text)){
+    if(S.pendingTransaction){
+      S.pendingTransaction = null;
+      addLog('system','SYSTEM','Transaction cancelled.');
+      return{action:null,spoken:'Transaction cancelled. How else can I help you?',amtClass:'neutral',amount:'—'};
+    }
+  }
+
+  // Check if there's a pending transaction and handle it
+  if(S.pendingTransaction){
+    const txn = S.pendingTransaction;
+    
+    // Try to extract missing information from current input
+    const amountMatch = text.match(/(\d+(?:[,.]\d+)?)\s*(?:rupees?|rs\.?|dollars?|\$)?/i);
+    const recipientMatch = text.match(/(?:to|for)\s+([a-z]+(?:\s+[a-z]+)*)/i);
+    
+    // Update transaction with new information
+    if(amountMatch && !txn.amount){
+      txn.amount = parseFloat(amountMatch[1].replace(',',''));
+    }
+    if(recipientMatch && !txn.recipient){
+      txn.recipient = recipientMatch[1].trim();
+    }
+    
+    // Check if we have all required information
+    if(txn.amount && txn.recipient){
+      // Complete the transaction
+      const completeText = `send ${txn.amount} to ${txn.recipient}`;
+      S.pendingTransaction = null; // Clear pending transaction
+      addLog('system','SYSTEM',`Completing transaction: ${completeText}`);
+      // Re-process with complete information
+      return processInput(completeText);
+    } else {
+      // Ask for missing information
+      let missingInfo = [];
+      if(!txn.amount) missingInfo.push('the amount');
+      if(!txn.recipient) missingInfo.push('the recipient name');
+      
+      const question = `I still need ${missingInfo.join(' and ')}. Please provide ${missingInfo.length > 1 ? 'them' : 'it'}.`;
+      return{action:null,spoken:question,amtClass:'neutral',amount:'—'};
+    }
+  }
+
+  // Extract transaction information from initial input
+  const sendMoneyPattern = /send|transfer|pay/i;
+  if(sendMoneyPattern.test(text)){
+    const amountMatch = text.match(/(\d+(?:[,.]\d+)?)\s*(?:rupees?|rs\.?|dollars?|\$)?/i);
+    const recipientMatch = text.match(/(?:to|for)\s+([a-z]+(?:\s+[a-z]+)*)/i);
+    
+    const amount = amountMatch ? parseFloat(amountMatch[1].replace(',','')) : null;
+    const recipient = recipientMatch ? recipientMatch[1].trim() : null;
+    
+    // If we don't have all information, store as pending transaction
+    if(!amount || !recipient){
+      S.pendingTransaction = {amount, recipient};
+      
+      let missingInfo = [];
+      if(!amount) missingInfo.push('the amount');
+      if(!recipient) missingInfo.push('the recipient name');
+      
+      const question = `I understand you want to send money. I need ${missingInfo.join(' and ')}. Please provide ${missingInfo.length > 1 ? 'them' : 'it'}.`;
+      addLog('system','SYSTEM',`Pending transaction created. Missing: ${missingInfo.join(', ')}`);
+      return{action:null,spoken:question,amtClass:'neutral',amount:'—'};
+    }
+  }
+
   if(S.isThinking) return;
   // Immediately stop listening so we don't process our own response
   stopListening(true);
