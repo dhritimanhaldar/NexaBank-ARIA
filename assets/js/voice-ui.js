@@ -1,11 +1,32 @@
 function hidePermissionOverlay(){
-  const el = DOM.permOverlay;
-  if(el) el.style.display = 'none';
+  const el = DOM.micPermissionScreen || DOM.permOverlay;
+  if(el) el.hidden = true;
 }
 
 function showPermissionOverlay(){
-  const el = DOM.permOverlay;
-  if(el) el.style.display = 'flex';
+  const el = DOM.micPermissionScreen || DOM.permOverlay;
+  if(el) el.hidden = false;
+}
+
+function setListeningUi(active, message) {
+  const safeMessage = message || (active ? 'Listening…' : 'Microphone idle.');
+  if (active) {
+    setStatus('listening', safeMessage);
+    setOrbSpin(true);
+  } else {
+    setStatus('live', safeMessage);
+    setOrbSpin(false);
+  }
+  if (typeof updateMicBtn === 'function') {
+    updateMicBtn();
+  }
+}
+
+function setMicPermissionPending(isPending) {
+  const btn = document.getElementById('allowMicrophoneBtn');
+  if (!btn) return;
+  btn.disabled = !!isPending;
+  btn.setAttribute('aria-busy', isPending ? 'true' : 'false');
 }
 
 function markMicPermissionAsked(){
@@ -95,4 +116,6 @@ window.setStatus = setStatus;
 window.setOrbSpin = setOrbSpin;
 window.showToast = showToast;
 window.updateMicBtn = updateMicBtn;
+window.setListeningUi = setListeningUi;
+window.setMicPermissionPending = setMicPermissionPending;
 window.cancelSpeech = cancelSpeech;

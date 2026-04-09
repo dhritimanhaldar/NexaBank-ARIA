@@ -6,6 +6,13 @@ const S = {
   micReady:     false,
   permissionAsked: (window.safeStorageGet ? safeStorageGet('ariaMicPermissionAsked', '0') : '0') === '1',
   permissionGranted: (window.safeStorageGet ? safeStorageGet('ariaMicPermissionGranted', '0') : '0') === '1',
+  currentRole: null,
+  micPermissionGranted: false,
+  recognitionActive: false,
+  silenceTimeoutId: null,
+  maxListenTimeoutId: null,
+  hasDetectedSpeech: false,
+  micPermissionInFlight: false,
 
   sessionId: 'SES-'+Math.random().toString(36).slice(2,7).toUpperCase(),
   accounts:  { savings:124500, current:58200 },
@@ -49,4 +56,47 @@ const S = {
 
 document.getElementById('sessionId').textContent = S.sessionId;
 
+function setCurrentRole(role) {
+  S.currentRole = role;
+  S.role = role;
+}
+
+function setMicPermissionGranted(value) {
+  const granted = Boolean(value);
+  S.micPermissionGranted = granted;
+  S.permissionGranted = granted;
+}
+
+function setListening(value) {
+  const active = Boolean(value);
+  S.isListening = active;
+  S.recognitionActive = active;
+}
+
+function clearRecognitionTimers() {
+  if (S.silenceTimeoutId) {
+    clearTimeout(S.silenceTimeoutId);
+    S.silenceTimeoutId = null;
+  }
+  if (S.maxListenTimeoutId) {
+    clearTimeout(S.maxListenTimeoutId);
+    S.maxListenTimeoutId = null;
+  }
+}
+
+function resetSpeechFlags() {
+  S.hasDetectedSpeech = false;
+}
+
+function setMicPermissionInFlight(value) {
+  S.micPermissionInFlight = Boolean(value);
+}
+
+window.appState = S;
+window.setCurrentRole = setCurrentRole;
+window.setMicPermissionGranted = setMicPermissionGranted;
+window.setListening = setListening;
+window.clearRecognitionTimers = clearRecognitionTimers;
+window.resetSpeechFlags = resetSpeechFlags;
+window.setMicPermissionInFlight = setMicPermissionInFlight;
 window.S = S;
