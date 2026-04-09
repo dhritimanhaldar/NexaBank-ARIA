@@ -35,6 +35,7 @@ const DOM = {
   supervisorRoleButton: document.getElementById('supervisorRole'),
   allowMicButton: document.getElementById('allowMicrophoneBtn'),
   micPermissionScreen: document.getElementById('micPermissionScreen'),
+  micPermissionModal: document.getElementById('micPermissionModal'),
   enterCustomerBtn: document.getElementById('enterCustomerBtn'),
   enterSupervisorBtn: document.getElementById('enterSupervisorBtn'),
   roleBadge: document.getElementById('roleBadge'),

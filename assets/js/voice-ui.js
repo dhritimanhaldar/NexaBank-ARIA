@@ -1,11 +1,35 @@
-function hidePermissionOverlay(){
-  const el = DOM.micPermissionScreen || DOM.permOverlay;
-  if(el) el.hidden = true;
+function hideMicPermissionPrompt() {
+  const modal = document.getElementById('micPermissionModal');
+  const screen = document.getElementById('micPermissionScreen');
+
+  if (modal) {
+    modal.hidden = true;
+    modal.classList.remove('is-open', 'active', 'visible');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  if (screen) {
+    screen.hidden = true;
+    screen.classList.remove('is-open', 'active', 'visible');
+    screen.setAttribute('aria-hidden', 'true');
+  }
 }
 
-function showPermissionOverlay(){
-  const el = DOM.micPermissionScreen || DOM.permOverlay;
-  if(el) el.hidden = false;
+function showMicPermissionPrompt() {
+  const modal = document.getElementById('micPermissionModal');
+  const screen = document.getElementById('micPermissionScreen');
+
+  if (modal) {
+    modal.hidden = false;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  if (screen) {
+    screen.hidden = false;
+    screen.classList.add('is-open');
+    screen.setAttribute('aria-hidden', 'false');
+  }
 }
 
 function setListeningUi(active, message) {
@@ -50,9 +74,9 @@ function markMicPermissionDenied(){
 
 function syncPermissionOverlayOnBoot(){
   if(S.permissionGranted){
-    hidePermissionOverlay();
+    hideMicPermissionPrompt();
   } else {
-    showPermissionOverlay();
+    showMicPermissionPrompt();
   }
 }
 
