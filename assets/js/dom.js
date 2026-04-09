@@ -28,7 +28,13 @@ const DOM = {
   savingsChg: document.getElementById('savingsChg'),
   currentChg: document.getElementById('currentChg'),
   savingsCard: document.getElementById('savingsCard'),
-  currentCard: document.getElementById('currentCard')
+  currentCard: document.getElementById('currentCard'),
+  roleGate: document.getElementById('roleGate'),
+  roleGateStatus: document.getElementById('roleGateStatus'),
+  enterCustomerBtn: document.getElementById('enterCustomerBtn'),
+  enterSupervisorBtn: document.getElementById('enterSupervisorBtn'),
+  roleBadge: document.getElementById('roleBadge'),
+  liveModeBadge: document.getElementById('liveModeBadge')
 };
 
 window.DOM = DOM;

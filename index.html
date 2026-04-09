@@ -11,8 +11,32 @@
 <link rel="stylesheet" href="assets/css/layout.css">
 <link rel="stylesheet" href="assets/css/components.css">
 <link rel="stylesheet" href="assets/css/states.css">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  window.NEXA_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyBzD_qC2GStD36bovs341IULT69VVtTaPI",
+    authDomain: "nexabank-aria.firebaseapp.com",
+    projectId: "nexabank-aria",
+    storageBucket: "nexabank-aria.firebasestorage.app",
+    messagingSenderId: "280117994235",
+    appId: "1:280117994235:web:a79ad103534b200b6a865e"
+  };
+</script>
 </head>
 <body>
+
+<div id="roleGate" class="role-gate">
+  <div class="role-gate-card">
+    <div class="role-gate-title">Choose Role</div>
+    <div class="role-gate-sub">Select how you want to enter this live NexaBank ARIA session.</div>
+    <div class="role-gate-actions">
+      <button id="enterCustomerBtn" class="perm-btn">Enter as Customer</button>
+      <button id="enterSupervisorBtn" class="log-btn">Enter as Supervisor</button>
+    </div>
+    <div id="roleGateStatus" class="role-gate-status">Checking live session availability…</div>
+  </div>
+</div>
 
 <!-- Microphone permission overlay (shown until mic is granted) -->
 <div class="perm-overlay" id="permOverlay">
@@ -37,6 +61,8 @@
   <div class="topbar-right">
     <div class="local-badge">RUNS LOCALLY · NO API KEY</div>
     <div class="pill"><div class="dot live" id="statusDot"></div><span id="statusLabel">READY</span></div>
+    <div class="pill"><span>ROLE</span><span id="roleBadge" style="color:var(--amber);margin-left:4px">UNSET</span></div>
+    <div class="pill"><span>LIVE MODE</span><span id="liveModeBadge" style="color:var(--text);margin-left:4px">LOCAL</span></div>
     <div class="pill">SESSION <span id="sessionId" style="color:var(--text);margin-left:4px">—</span></div>
     <div class="pill">TXN <span id="txnCount" style="color:var(--amber);margin-left:4px">0</span></div>
   </div>
@@ -163,6 +189,9 @@
 <script src="assets/js/intents.js"></script>
 <script src="assets/js/process-input.js"></script>
 <script src="assets/js/mic.js"></script>
+<script src="assets/js/session-store.js"></script>
+<script src="assets/js/firebase-sync.js"></script>
+<script src="assets/js/role-gate.js"></script>
 <script src="assets/js/app-init.js"></script>
 <script src="assets/js/globals.js"></script>
 </body>

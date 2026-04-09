@@ -38,6 +38,7 @@ function setStatus(type,label){
   DOM.statusLabel.textContent=label;
   const stateMap={live:'● READY',listening:'◉ LISTENING',thinking:'◈ THINKING',speaking:'◎ SPEAKING',muted:'✕ MUTED'};
   DOM.ariaState.textContent=stateMap[type]||'● READY';
+  if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
 }
 
 function setOrbSpin(on){
