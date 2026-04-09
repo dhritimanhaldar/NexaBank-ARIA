@@ -475,8 +475,7 @@ function respond(text){
 }
 
 // ─── PROCESS INPUT ────────────────────────────────────────
-function 478
-{
+function processInput(text){
 
     // Check for cancel transaction commands
   const cancelWords = /cancel|stop|do not proceed|don'?t proceed/i;
@@ -584,28 +583,59 @@ function actionLabel(a){
 
 // ─── MIC INIT (called once on permission grant) ───────────
 async function initMic(){
+  if(S._stream && S.micReady){
+    showToast('ℹ️','Microphone is already initialized.');
+    return;
+  }
+
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    addLog('error','ERROR','Microphone capture is not supported by this browser.');
+    showToast('⚠','Microphone capture is not supported by this browser.');
+    document.getElementById('permOverlay').style.display='none';
+    updateMicBtn();
+    return;
+  }
+
+  if(!window.isSecureContext && !['localhost','127.0.0.1'].includes(location.hostname)){
+    addLog('error','ERROR','Microphone access requires HTTPS or localhost.');
+    showToast('⚠','Microphone access requires HTTPS or localhost.');
+    document.getElementById('permOverlay').style.display='none';
+    updateMicBtn();
+    return;
+  }
+
   try{
     const stream=await navigator.mediaDevices.getUserMedia({
       audio:{
-        echoCancellation:true,   // prevents mic from picking up speaker output
+        echoCancellation:true,
         noiseSuppression:true,
         autoGainControl:true,
         channelCount:1
       }
     });
+
+    if(!stream || !stream.getAudioTracks().length){
+      throw new Error('No audio track obtained');
+    }
+
     S._stream=stream;
     S.micReady=true;
     document.getElementById('permOverlay').style.display='none';
     startWaveAlways(stream);
     addLog('system','SYSTEM','Microphone ready · Echo cancellation ON · Auto-listen active');
     updateMicBtn();
-    // Boot greeting
+    showToast('✅','Microphone enabled.');
     speak("Hello! I'm ARIA, your NexaBank AI assistant. I can transfer money, pay bills, check balances, block cards, or send statements. How can I help you today?");
+    scheduleAutoListen(500);
   }catch(err){
-    addLog('error','ERROR','Microphone access denied: '+err.message);
-    showToast('⚠','Mic access denied. Please allow microphone and refresh.');
-    document.getElementById('permOverlay').style.display='none';
-    document.getElementById('micBtn').textContent='⚠ Mic denied — type below';
+    const reason = err?.name || err?.message || 'Permission denied';
+    addLog('error','ERROR','Microphone init failed: '+reason);
+    showToast('⚠','Microphone access failed: '+(err.message||reason));
+    if(err.name==='NotAllowedError' || err.name==='PermissionDeniedError'){
+      document.getElementById('permOverlay').style.display='none';
+      setStatus('muted','MIC UNAVAILABLE');
+    }
+    updateMicBtn();
   }
 }
 
