@@ -1,9 +1,9 @@
 function handleRoleSelection(role) {
   console.log(`[role] selected: ${role}`);
   setCurrentRole(role);
+  const roleGate = document.getElementById('roleGate');
+  if (roleGate) roleGate.style.display = 'none';
   showMicPermissionPrompt();
-
-  // keep any existing screen-switching/navigation logic here
 }
 
 async function handleMicPermissionClick() {
