@@ -349,6 +349,15 @@ const S = {
 
   sessionId: 'SES-'+Math.random().toString(36).slice(2,7).toUpperCase(),
   accounts:  { savings:124500, current:58200 },
+  customerProfile: {
+    fullName: 'Dhritiman Haldar',
+    mobile: '+91 98765 43210',
+    email: 'dhritiman@example.com',
+    city: 'Pune',
+    address: 'Baner, Pune, Maharashtra',
+    panMasked: 'ABCDE1234X',
+    kycStatus: 'Verified'
+  },
   totalDebit:0, txSeq:0, logEntries:[],
 
   recognition:   null,
@@ -510,11 +519,30 @@ const NLP = {
 
   classify(text){
     const t = text.toLowerCase().trim();
+
     if(/\b(thank you|thanks|thankyou|many thanks|thanks a lot)\b/.test(t)) return { intent:'gratitude' };
     if(/\b(sorry|i am sorry|i'm sorry|apologies|my apologies)\b/.test(t)) return { intent:'apology' };
     if(/\b(please|excuse me|pardon me|kindly)\b/.test(t) && t.split(/\s+/).length <= 4) return { intent:'courtesy' };
     if(/\b(good morning|good afternoon|good evening)\b/.test(t)) return { intent:'greeting_time' };
     if(/\b(bye|goodbye|see you|talk to you later|catch you later)\b/.test(t)) return { intent:'farewell' };
+
+    if(/\b(can you|could you|are you able to|do you support|do you handle)\b/.test(t))
+      return { intent:'capability_check', task:text };
+
+    if(/\b(what can you do|what all can you do|what do you do|how can you help|help me with)\b/.test(t))
+      return { intent:'help' };
+
+    if(/\b(last transaction|recent transaction|recent transactions|transaction history|show transaction|tell me my transactions|what transactions|what was my last transaction)\b/.test(t))
+      return { intent:'transaction_info', scope:'recent' };
+
+    if(/\b(transaction)\b.*\b(amount|status|details|time|date|recipient|beneficiary)\b/.test(t))
+      return { intent:'transaction_info', scope:'recent' };
+
+    if(/\b(update|change|modify|edit|correct)\b.*\b(email|mobile|phone|address|city|name|profile|details|kyc)\b/.test(t))
+      return { intent:'update_info', field:detectProfileFieldToUpdate(text) };
+
+    if(/\bwhat is my\b.*\b(email|mobile|phone|address|city|name|kyc)\b/.test(t) || /\bshow my\b.*\b(email|mobile|phone|address|city|profile|details|kyc)\b/.test(t))
+      return { intent:'profile_info', field:detectProfileFieldToUpdate(text) };
 
     if(/\b(transfer|send|wire|remit|neft|imps|upi|move)\b/.test(t) && !/bill/.test(t))
       return { intent:'transfer', amount:this.amount(text), to:this.name(text), account:this.account(t) };
@@ -534,38 +562,125 @@ const NLP = {
     }
 
     if(/\b(hi|hello|hey|namaste)\b/.test(t)) return { intent:'greeting' };
-    if(/\b(help|what can you|how do|options|menu)\b/.test(t)) return { intent:'help' };
 
-    return { intent:'unknown' };
+    return { intent:'unknown', raw:text };
   }
 };
 
+function getRecentLedgerRows(limit=5){
+  const rows = [...document.querySelectorAll('#ledgerBody tr')];
+  return rows.slice(0, limit);
+}
+
+function getRecentTransactionSummary(limit=5){
+  const rows = getRecentLedgerRows(limit);
+  if(!rows.length) return null;
+
+  return rows.map(row => {
+    const cells = row.querySelectorAll('td');
+    return {
+      seq: cells[0]?.textContent?.trim() || '',
+      time: cells[1]?.textContent?.trim() || '',
+      action: cells[2]?.textContent?.trim() || '',
+      details: cells[3]?.textContent?.trim() || '',
+      amount: cells[4]?.textContent?.trim() || '',
+      status: cells[5]?.textContent?.trim() || ''
+    };
+  });
+}
+
+function buildRecentTransactionSpeech(rows){
+  if(!rows || !rows.length){
+    return "I don't see any completed transactions yet. You can ask me to transfer money, pay a bill, check your balance, block a card, or request a statement.";
+  }
+
+  if(rows.length === 1){
+    const r = rows[0];
+    return `Your most recent transaction was ${r.action} at ${r.time}. ${r.details}. Amount ${r.amount}. Status ${r.status}.`;
+  }
+
+  const first = rows[0];
+  return `I found your recent transactions. The latest was ${first.action} at ${first.time}, ${first.details}, amount ${first.amount}, status ${first.status}. I can also walk you through more of them if you want.`;
+}
+
+function canDoTask(text){
+  const t = text.toLowerCase();
+
+  const supported = [
+    /\btransfer\b|\bsend money\b|\bsend\b/,
+    /\bpay\b.*\bbill\b|\bbill payment\b/,
+    /\bbalance\b/,
+    /\bblock\b.*\bcard\b|\bfreeze\b.*\bcard\b/,
+    /\bstatement\b|\bpassbook\b|\btransaction history\b/,
+    /\btransaction\b|\brecent transaction\b|\blast transaction\b/,
+    /\bupdate\b.*\b(email|mobile|phone|address|city|profile|details)\b/
+  ];
+
+  return supported.some(re => re.test(t));
+}
+
+function getSupportedTaskExamples(){
+  return [
+    'transfer money',
+    'pay a bill',
+    'check your balance',
+    'block a debit card',
+    'request a statement',
+    'review recent transactions',
+    'update your contact details'
+  ];
+}
+
+function detectProfileFieldToUpdate(text){
+  const t = text.toLowerCase();
+  if(/\bmobile\b|\bphone\b|\bcontact number\b/.test(t)) return 'mobile';
+  if(/\bemail\b|\bmail\b/.test(t)) return 'email';
+  if(/\baddress\b/.test(t)) return 'address';
+  if(/\bcity\b|\blocation\b/.test(t)) return 'city';
+  if(/\bname\b/.test(t)) return 'fullName';
+  if(/\bkyc\b/.test(t)) return 'kycStatus';
+  return null;
+}
+
+function getCustomerProfileLabel(field){
+  return {
+    fullName: 'full name',
+    mobile: 'mobile number',
+    email: 'email address',
+    city: 'city',
+    address: 'address',
+    panMasked: 'PAN',
+    kycStatus: 'KYC status'
+  }[field] || field;
+}
+
 // ─── RESPONSE BUILDER ────────────────────────────────────
 function respond(text){
-  const p=NLP.classify(text);
-  const{intent,amount,to,account,biller,period}=p;
-  const sav=S.accounts.savings, cur=S.accounts.current;
-  const srcBal=account==='current'?cur:sav;
-  const fmt=n=>'₹ '+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2});
-  const cap=s=>s?s[0].toUpperCase()+s.slice(1):'';
+  const p = NLP.classify(text);
+  const { intent, amount, to, account, biller, period, task, field, scope } = p;
 
-  if(intent==='transfer'){
-    if(!amount && !to) return{
+  const sav = S.accounts.savings, cur = S.accounts.current;
+  const srcBal = account === 'current' ? cur : sav;
+  const fmt = n => '₹ ' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+  const cap = s => s ? s[0].toUpperCase() + s.slice(1) : '';
+
+  if(intent === 'transfer'){
+    if(!amount && !to) return {
       action:null,
       spoken:"Sure, I can help with that. Whom would you like to send it to, and how much should I send?"
     };
 
-    if(!amount) return{
+    if(!amount) return {
       action:null,
       spoken:`Okay, I will send money to ${to}. How much should I send?`
     };
 
-    if(!to) return{
+    if(!to) return {
       action:null,
       spoken:`Okay, I understand you want to send ${fmt(amount)}. Whom would you like to send it to?`
     };
 
-    if(amount>srcBal) return{
+    if(amount > srcBal) return {
       action:'transfer',
       status:'failed',
       amtClass:'debit',
@@ -574,70 +689,196 @@ function respond(text){
       spoken:`Sorry, your ${account} account has only ${fmt(srcBal)}, not enough to transfer ${fmt(amount)}.`
     };
 
-    return{
+    return {
       action:'transfer',
       status:'success',
       amtClass:'debit',
       amount:fmt(amount),
       detail:`To: ${to} | From: ${cap(account)}`,
-      debit:{acct:account,amt:amount},
-      spoken:`Done! ${fmt(amount)} transferred to ${to} from your ${account} account. New balance: ${fmt(srcBal-amount)}.`
+      debit:{ acct:account, amt:amount },
+      spoken:`Done! ${fmt(amount)} transferred to ${to} from your ${account} account. New balance: ${fmt(srcBal - amount)}.`
     };
   }
-  if(intent==='pay_bill'){
-    if(!amount) return{action:'payment',status:'pending',amtClass:'neutral',amount:'—',
-      detail:`Biller: ${biller||'Unknown'}`,
-      spoken:`I've noted your ${biller||'bill'} payment. Could you confirm the amount?`};
-    if(amount>srcBal) return{action:'payment',status:'failed',amtClass:'debit',amount:fmt(amount),
+
+  if(intent === 'pay_bill'){
+    if(!amount) return {
+      action:'payment',
+      status:'pending',
+      amtClass:'neutral',
+      amount:'—',
+      detail:`Biller: ${biller || 'Unknown'}`,
+      spoken:`I've noted your ${biller || 'bill'} payment. Could you confirm the amount?`
+    };
+
+    if(amount > srcBal) return {
+      action:'payment',
+      status:'failed',
+      amtClass:'debit',
+      amount:fmt(amount),
       detail:`Biller: ${biller} | Insufficient funds`,
-      spoken:`Your ${account} account balance of ${fmt(srcBal)} is insufficient for this ${fmt(amount)} payment.`};
-    return{action:'payment',status:'success',amtClass:'debit',amount:fmt(amount),
-      detail:`Biller: ${biller||'Bill'} | From: ${cap(account)}`,
-      debit:{acct:account,amt:amount},
-      spoken:`${biller||'Bill'} payment of ${fmt(amount)} processed successfully from your ${account} account.`};
+      spoken:`Your ${account} account balance of ${fmt(srcBal)} is insufficient for this ${fmt(amount)} payment.`
+    };
+
+    return {
+      action:'payment',
+      status:'success',
+      amtClass:'debit',
+      amount:fmt(amount),
+      detail:`Biller: ${biller || 'Bill'} | From: ${cap(account)}`,
+      debit:{ acct:account, amt:amount },
+      spoken:`${biller || 'Bill'} payment of ${fmt(amount)} processed successfully from your ${account} account.`
+    };
   }
-  if(intent==='check_balance'){
-    const a=account;
-    const msg=a==='both'
-      ?`Your savings balance is ${fmt(sav)} and current account is ${fmt(cur)}.`
-      :a==='current'?`Your current account balance is ${fmt(cur)}.`
-      :`Your savings account balance is ${fmt(sav)}.`;
-    const detail=a==='both'?`Savings: ${fmt(sav)} | Current: ${fmt(cur)}`
-      :a==='current'?'Current ••9034':'Savings ••4821';
-    return{action:'balance',status:'info',amtClass:'neutral',amount:'—',detail,spoken:msg};
+
+  if(intent === 'check_balance'){
+    const a = account;
+    const msg = a === 'both'
+      ? `Your savings balance is ${fmt(sav)} and current account is ${fmt(cur)}.`
+      : a === 'current'
+      ? `Your current account balance is ${fmt(cur)}.`
+      : `Your savings account balance is ${fmt(sav)}.`;
+
+    const detail = a === 'both'
+      ? `Savings: ${fmt(sav)} | Current: ${fmt(cur)}`
+      : a === 'current'
+      ? 'Current ••9034'
+      : 'Savings ••4821';
+
+    return { action:'balance', status:'info', amtClass:'neutral', amount:'—', detail, spoken:msg };
   }
-  if(intent==='block_card')
-    return{action:'block',status:'success',amtClass:'neutral',amount:'—',
+
+  if(intent === 'block_card'){
+    return {
+      action:'block',
+      status:'success',
+      amtClass:'neutral',
+      amount:'—',
       detail:`${cap(account)} Debit Card — blocked`,
-      spoken:`Your ${account} debit card has been blocked immediately. A new card will be dispatched within 5 working days.`};
-  if(intent==='request_statement')
-    return{action:'statement',status:'success',amtClass:'neutral',amount:'—',
-      detail:`${cap(account)} | ${cap(period||'last month')}`,
-      spoken:`Your ${account} statement for ${period||'last month'} has been sent to your registered email address.`};
-  if(intent==='greeting')
-    return{action:null,spoken:"Hello! I'm ARIA, your NexaBank AI assistant. I can transfer money, pay bills, check balances, block cards, or send statements. What can I do for you?"};
+      spoken:`Your ${account} debit card has been blocked immediately. A new card will be dispatched within 5 working days.`
+    };
+  }
 
-  if(intent==='greeting_time')
-    return{action:null,spoken:"Good to hear from you. How may I help you with your banking today?"};
+  if(intent === 'request_statement'){
+    return {
+      action:'statement',
+      status:'success',
+      amtClass:'neutral',
+      amount:'—',
+      detail:`${cap(account)} | ${cap(period || 'last month')}`,
+      spoken:`Your ${account} statement for ${period || 'last month'} has been sent to your registered email address.`
+    };
+  }
 
-  if(intent==='gratitude')
-    return{action:null,spoken:"You're most welcome. Is there anything else I can help you with today?"};
+  if(intent === 'transaction_info'){
+    const rows = getRecentTransactionSummary(scope === 'recent' ? 5 : 5);
+    return {
+      action:null,
+      spoken:buildRecentTransactionSpeech(rows)
+    };
+  }
 
-  if(intent==='apology')
-    return{action:null,spoken:"No worries at all. Please go ahead — I'm here to help."};
+  if(intent === 'profile_info'){
+    if(field && S.customerProfile[field] != null){
+      return {
+        action:null,
+        spoken:`Your ${getCustomerProfileLabel(field)} on file is ${S.customerProfile[field]}.`
+      };
+    }
 
-  if(intent==='courtesy')
-    return{action:null,spoken:"Of course. Please tell me what you'd like me to do."};
+    return {
+      action:null,
+      spoken:`I can help with your profile details like email address, mobile number, city, address, or KYC status. Which one would you like to check?`
+    };
+  }
 
-  if(intent==='farewell')
-    return{action:null,spoken:"You're welcome. Take care, and feel free to come back anytime you need help."};
+  if(intent === 'update_info'){
+    if(field && S.customerProfile[field] != null){
+      return {
+        action:null,
+        spoken:`I can help update your ${getCustomerProfileLabel(field)}. For this demo, I can capture the request, but I am not yet applying profile changes automatically. Please tell me the new ${getCustomerProfileLabel(field)} you want to set.`
+      };
+    }
 
-  if(intent==='help')
-    return{action:null,spoken:"I can help with: transferring money, paying bills, checking balances, blocking a lost card, or requesting statements. Just say or type what you need!"};
+    return {
+      action:null,
+      spoken:`I can help with updates to your mobile number, email address, city, address, name, or KYC-related details. What would you like to update?`
+    };
+  }
 
-  return{action:'unknown',status:'info',amtClass:'neutral',amount:'—',
+  if(intent === 'capability_check'){
+    const yes = canDoTask(task || text);
+    if(yes){
+      return {
+        action:null,
+        spoken:`Yes, I can help with that. If you'd like, you can go ahead and ask me now.`
+      };
+    }
+
+    const examples = getSupportedTaskExamples().slice(0,4).join(', ');
+    return {
+      action:null,
+      spoken:`No, I can't perform that task right now. I can help with things like ${examples}.`
+    };
+  }
+
+  if(intent === 'greeting'){
+    return {
+      action:null,
+      spoken:"Hello! I'm ARIA, your NexaBank AI assistant. What can I help you with today?"
+    };
+  }
+
+  if(intent === 'greeting_time'){
+    return {
+      action:null,
+      spoken:"Good to hear from you. How may I help you with your banking today?"
+    };
+  }
+
+  if(intent === 'gratitude'){
+    return {
+      action:null,
+      spoken:"You're most welcome. I'm happy to help. Is there anything else you'd like me to do?"
+    };
+  }
+
+  if(intent === 'apology'){
+    return {
+      action:null,
+      spoken:"No worries at all. Please go ahead — I'm here to help."
+    };
+  }
+
+  if(intent === 'courtesy'){
+    return {
+      action:null,
+      spoken:"Of course. Please tell me what you'd like me to do."
+    };
+  }
+
+  if(intent === 'farewell'){
+    return {
+      action:null,
+      spoken:"You're welcome. Take care, and feel free to come back anytime you need banking help."
+    };
+  }
+
+  if(intent === 'help'){
+    return {
+      action:null,
+      spoken:"I can help with transferring money, paying bills, checking balances, blocking a debit card, requesting statements, reviewing recent transactions, and guiding you on profile updates."
+    };
+  }
+
+  const examples = getSupportedTaskExamples().slice(0,5).join(', ');
+  return {
+    action:'unknown',
+    status:'info',
+    amtClass:'neutral',
+    amount:'—',
     detail:`Input: "${text.slice(0,40)}"`,
-    spoken:"I didn't quite understand that. I can transfer money, pay bills, check balances, block cards, or send statements — could you rephrase?"};
+    spoken:`I’m sorry, but I can’t help with that request right now. I can help with ${examples}.`
+  };
 }
 
 // ─── PROCESS INPUT ────────────────────────────────────────
