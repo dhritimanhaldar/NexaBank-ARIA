@@ -130,8 +130,10 @@ function cancelSpeech(){
   DOM.orbFace.textContent='🤖';
 }
 
-window.hidePermissionOverlay = hidePermissionOverlay;
-window.showPermissionOverlay = showPermissionOverlay;
+window.hidePermissionOverlay = hideMicPermissionPrompt;
+window.showPermissionOverlay = showMicPermissionPrompt;
+window.hideMicPermissionPrompt = hideMicPermissionPrompt;
+window.showMicPermissionPrompt = showMicPermissionPrompt;
 window.markMicPermissionAsked = markMicPermissionAsked;
 window.markMicPermissionGranted = markMicPermissionGranted;
 window.markMicPermissionDenied = markMicPermissionDenied;
