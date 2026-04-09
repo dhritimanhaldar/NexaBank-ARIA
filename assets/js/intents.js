@@ -17,6 +17,7 @@ function canDoTask(text){
 function getSupportedTaskExamples(){
   return [
     'transfer money',
+    'make an international transfer',
     'pay a bill',
     'check your balance',
     'block a debit card',
@@ -57,7 +58,7 @@ function respond(text){
       amtClass:'debit',
       amount:fmt(amount),
       detail:`To: ${to} | Insufficient funds`,
-      spoken:`Sorry, your ${account} account has only ${fmt(srcBal)}, not enough to transfer ${fmt(amount)}.`
+      spoken:`I'm afraid your ${account} account currently holds ${fmt(srcBal)}, which isn't sufficient to transfer ${fmt(amount)}. Let's see how we can make that work — would you like to use a different account?`
     };
 
     return {
@@ -67,7 +68,7 @@ function respond(text){
       amount:fmt(amount),
       detail:`To: ${to} | From: ${cap(account)}`,
       debit:{ acct:account, amt:amount },
-      spoken:`Done! ${fmt(amount)} transferred to ${to} from your ${account} account. New balance: ${fmt(srcBal - amount)}.`
+      spoken:`We're all set! ${fmt(amount)} has been transferred to ${to} from your ${account} account. Your new balance is ${fmt(srcBal - amount)}. Is there anything else I can help you with?`
     };
   }
 
@@ -198,17 +199,69 @@ function respond(text){
     };
   }
 
+  if(intent === 'international_transfer'){
+    if(!amount && !to) return {
+      action:null,
+      spoken:"I can certainly help you move money across borders today. Which country and recipient are you sending to, and how much would you like to transfer? You will need the recipient's IBAN — that's their International Bank Account Number — and their BIC, which is the Bank Identifier Code."
+    };
+    if(!amount) return {
+      action:null,
+      spoken:`I can certainly help you send money to ${to} internationally. How much would you like to transfer?`
+    };
+    if(!to) return {
+      action:null,
+      spoken:`I can help with an international transfer of ${fmt(amount)}. Which country or recipient are you sending this to? Please have their IBAN and BIC ready.`
+    };
+    if(amount > srcBal) return {
+      action:'international_transfer',
+      status:'failed',
+      amtClass:'debit',
+      amount:fmt(amount),
+      detail:`International · To: ${to} | Insufficient funds`,
+      spoken:`I'm afraid your ${account} account has only ${fmt(srcBal)}, which isn't sufficient for this international transfer of ${fmt(amount)}. Would you like to explore another option?`
+    };
+    return {
+      action:'international_transfer',
+      status:'success',
+      amtClass:'debit',
+      amount:fmt(amount),
+      detail:`International Transfer · To: ${to} | From: ${cap(account)}`,
+      debit:{ acct:account, amt:amount },
+      spoken:`Your international transfer of ${fmt(amount)} to ${to} has been initiated. For your security, I'll need you to generate a confirmation code using the Digital Secure Key in your HSBC app. Your new balance will be ${fmt(srcBal - amount)} once the transfer clears.`
+    };
+  }
+
+  if(intent === 'life_event'){
+    const { eventType } = p;
+    if(eventType === 'moving_abroad') return {
+      action:null,
+      spoken:"That's an exciting step! HSBC is uniquely positioned to help you manage your finances across multiple countries. You may want to explore our Global Money Account, which lets you hold and exchange multiple currencies. Would you like to know more?"
+    };
+    if(eventType === 'buying_home') return {
+      action:null,
+      spoken:"Congratulations on the new home! Let's make sure the financial side of this transition is as smooth as possible. I can help you with mortgage-related queries or setting up standing orders. What would you like to explore?"
+    };
+    if(eventType === 'getting_married') return {
+      action:null,
+      spoken:"Congratulations — what a wonderful milestone! HSBC can help you and your partner manage joint finances, explore our Premier services, or set up a Global Money Account. How can I help you get started?"
+    };
+    return {
+      action:null,
+      spoken:"That sounds like an important life event. HSBC is here to support you through every financial transition. How can I help you today?"
+    };
+  }
+
   if(intent === 'greeting'){
     return {
       action:null,
-      spoken:"Hello! I'm ARIA, your NexaBank AI assistant. What can I help you with today?"
+      spoken:"Hello! I'm ARIA, your HSBC Global Navigator. How may I assist you with your banking today?"
     };
   }
 
   if(intent === 'greeting_time'){
     return {
       action:null,
-      spoken:"Good to hear from you. How may I help you with your banking today?"
+      spoken:"Good to hear from you. I'm ARIA, HSBC's Global Navigator. Let's see how we can make that happen for you."
     };
   }
 
@@ -236,14 +289,14 @@ function respond(text){
   if(intent === 'farewell'){
     return {
       action:null,
-      spoken:"You're welcome. Take care, and feel free to come back anytime you need banking help."
+      spoken:"Thank you for banking with HSBC. Take care, and feel free to come back whenever you need us."
     };
   }
 
   if(intent === 'help'){
     return {
       action:null,
-      spoken:"I can help with transferring money, paying bills, checking balances, blocking a debit card, requesting statements, reviewing recent transactions, and guiding you on profile updates."
+      spoken:"I can help with transferring money, international transfers using your IBAN and BIC details, paying bills, checking balances, blocking a debit card, requesting statements, reviewing recent transactions, and guiding you on profile updates. I can also help you explore your Global Money Account or Premier status."
     };
   }
 
@@ -254,7 +307,7 @@ function respond(text){
     amtClass:'neutral',
     amount:'—',
     detail:`Input: "${text.slice(0,40)}"`,
-    spoken:`I'm sorry, but I can't help with that request right now. I can help with ${examples}.`
+    spoken:`That's an interesting thought! I'm afraid my expertise is mostly limited to the world of finance. While I can't help with that, I can certainly help you explore your Global Money Account, check your Premier status, or assist with ${examples}. Which would you prefer?`
   };
 }
 

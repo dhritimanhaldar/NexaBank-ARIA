@@ -197,7 +197,7 @@ function speakPendingResponse(rawText, spoken, detailText){
     if(detailText) addLog('system','SYSTEM',detailText);
     if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
     speak(spoken);
-  }, 350);
+  }, 1000);
 }
 
 function processInput(text){
@@ -205,6 +205,8 @@ function processInput(text){
 
   const rawText = String(text || '').trim();
   if(!rawText) return;
+
+  if(/\b(my pin is|my password is|secure key is|my code is|my secret is)\b|\b\d{6,8}\b/.test(rawText.toLowerCase())) return;
 
   const fmt = n => '₹ ' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2 });
 
@@ -259,7 +261,8 @@ function processInput(text){
   addLog('user','You',rawText);
   if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
   showThinking(true);
-  setStatus('thinking','THINKING');
+  const HSBC_FILLERS = ['Processing your request...','Connecting to your account...','Verifying your transaction...','Preparing your response...','One moment please...'];
+  setStatus('thinking',HSBC_FILLERS[Math.floor(Math.random()*HSBC_FILLERS.length)]);
   setOrbSpin(false);
 
   setTimeout(()=>{
@@ -282,7 +285,7 @@ function processInput(text){
         DOM.totalDebit.textContent = '₹ ' + S.totalDebit.toLocaleString('en-IN');
       }
     }
-  },550);
+  },2000);
 }
 
 window.processInput = processInput;

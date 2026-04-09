@@ -140,6 +140,9 @@ const NLP = {
     if(/\bwhat is my\b.*\b(email|mobile|phone|address|city|name|kyc)\b/.test(t) || /\bshow my\b.*\b(email|mobile|phone|address|city|profile|details|kyc)\b/.test(t))
       return { intent:'profile_info', field:detectProfileFieldToUpdate(text) };
 
+    if(/\b(international|overseas|abroad|foreign|cross.?border|iban|bic|swift)\b/.test(t) && /\b(transfer|send|wire|remit)\b/.test(t))
+      return { intent:'international_transfer', amount:this.amount(text), to:this.name(text), account:this.account(t) };
+
     if(/\b(transfer|send|wire|remit|neft|imps|upi|move)\b/.test(t) && !/bill/.test(t))
       return { intent:'transfer', amount:this.amount(text), to:this.name(text), account:this.account(t) };
 
@@ -161,6 +164,10 @@ const NLP = {
       const m=t.match(/(\d+|last|three|six|one|two)\s*months?/);
       return { intent:'request_statement', period:m?m[0]:'last month', account:this.account(t) };
     }
+
+    if(/\b(moving abroad|moving overseas|relocating abroad|emigrating|expat|move to another country)\b/.test(t)) return { intent:'life_event', eventType:'moving_abroad' };
+    if(/\b(buying a home|bought a house|new home|new house|mortgage|first home)\b/.test(t)) return { intent:'life_event', eventType:'buying_home' };
+    if(/\b(getting married|just married|newly married|wedding)\b/.test(t)) return { intent:'life_event', eventType:'getting_married' };
 
     if(/\b(hi|hello|hey|namaste)\b/.test(t)) return { intent:'greeting' };
 
