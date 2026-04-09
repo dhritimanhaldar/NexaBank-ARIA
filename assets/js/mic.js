@@ -1,3 +1,44 @@
+const SILENCE_TIMEOUT_MS = 2000;
+const MAX_LISTEN_MS = 10000;
+const MIN_TRANSCRIPT_LENGTH = 2;
+
+function hasMeaningfulTranscript(text) {
+  return typeof text === 'string' && text.trim().replace(/\s+/g, ' ').length >= MIN_TRANSCRIPT_LENGTH;
+}
+
+function startSilenceTimeout(recognition, onSilenceStop) {
+  if (appState.silenceTimeoutId) {
+    clearTimeout(appState.silenceTimeoutId);
+  }
+  appState.silenceTimeoutId = setTimeout(() => {
+    console.log('[mic] silence timeout reached');
+    stopRecognitionSession(recognition, 'silence-timeout');
+    if (typeof onSilenceStop === 'function') onSilenceStop();
+  }, SILENCE_TIMEOUT_MS);
+}
+
+function startMaxListenTimeout(recognition) {
+  if (appState.maxListenTimeoutId) {
+    clearTimeout(appState.maxListenTimeoutId);
+  }
+  appState.maxListenTimeoutId = setTimeout(() => {
+    console.log('[mic] max listen timeout reached');
+    stopRecognitionSession(recognition, 'max-listen-timeout');
+  }, MAX_LISTEN_MS);
+}
+
+function stopRecognitionSession(recognition, reason = 'manual-stop') {
+  if (!recognition || !appState.recognitionActive) return;
+  console.log(`[mic] stopping recognition: ${reason}`);
+  clearRecognitionTimers();
+  setListening(false);
+  try {
+    recognition.stop();
+  } catch (err) {
+    console.warn('[mic] recognition.stop() failed', err);
+  }
+}
+
 async function initMic(){
   if(S.role === 'supervisor') return;
   if(S._stream && S.micReady){
@@ -77,20 +118,14 @@ function scheduleAutoListen(delay=1000){
 
 function startListening(){
   if(S.role === 'supervisor') return;
-  if(!S.micReady||S.isMuted||S.isThinking||S.isSpeaking||S.isListening) return;
+  if(!S.micReady||S.isMuted||S.isThinking||S.isSpeaking||appState.recognitionActive) return;
 
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ showToast('ERR','Speech API not supported. Use Chrome.'); return; }
 
-  S.isListening=true;
-  S.pendingFinal='';
-  S.vadSpeechDetected=false;
-  S.vadSilenceStart=null;
-  clearVadBar();
-  DOM.transcriptText.textContent='Listening…';
-  setStatus('listening','LISTENING');
-  setOrbSpin(true);
-  updateMicBtn();
+  resetSpeechFlags();
+  clearRecognitionTimers();
+  setListening(true);
 
   const rec=new SR();
   S.recognition=rec;
@@ -99,38 +134,52 @@ function startListening(){
   rec.lang='en-IN';
   rec.maxAlternatives=1;
 
+  let stopReason = null;
   let restartAllowed=true;
 
+  DOM.transcriptText.textContent='Listening…';
+  setListeningUi(true, 'Listening…');
+
+  function stopSession(reason='manual-stop') {
+    stopReason = reason;
+    stopRecognitionSession(rec, reason);
+  }
+
   rec.onresult=(e)=>{
-    // If ARIA is still speaking → barge-in: cancel TTS immediately
     if(S.isSpeaking){
       cancelSpeech();
     }
 
+    let transcript='';
     let interim='';
     for(let i=e.resultIndex;i<e.results.length;i++){
-      const t=e.results[i][0].transcript;
-      if(e.results[i].isFinal){
-        S.pendingFinal=(S.pendingFinal+' '+t).trim();
+      const result=e.results[i];
+      if(!result||!result[0]) continue;
+      transcript += result[0].transcript || '';
+      if(result.isFinal){
+        S.pendingFinal=(S.pendingFinal+' '+result[0].transcript).trim();
       } else {
-        interim=t;
+        interim = result[0].transcript || interim;
       }
     }
 
-    const display=(S.pendingFinal+' '+interim).trim();
-    if(display) DOM.transcriptText.textContent=display;
+    const cleanedTranscript = transcript.trim();
+    const display = (S.pendingFinal+' '+interim).trim();
+    if(display) DOM.transcriptText.textContent = display;
 
-    // Every result = speech detected → reset 2-second silence timer
-    if(display){
+    if(hasMeaningfulTranscript(cleanedTranscript)){
+      appState.hasDetectedSpeech = true;
       S.vadSpeechDetected=true;
       S.vadSilenceStart=null;
-      startSilenceTimer(()=>{
-        const final=(S.pendingFinal+' '+interim).trim();
+      startSilenceTimeout(rec, () => {
+        if (typeof setListeningUi === 'function') {
+          setListeningUi(false, 'No speech detected, stopped listening.');
+        }
+        const final = (S.pendingFinal+' '+interim).trim();
         if(final.length>1){
           restartAllowed=false;
           processInput(final);
         } else {
-          // Noise, not real speech — reset
           S.pendingFinal='';
           DOM.transcriptText.textContent='Listening…';
         }
@@ -138,38 +187,43 @@ function startListening(){
     }
   };
 
+  rec.onspeechend = () => {
+    console.log('[mic] speech end detected');
+    stopSession('speech-end');
+  };
+
   rec.onerror=(e)=>{
-    if(e.error==='not-allowed'){
-      showToast('ERR','Microphone access denied.');
-      S.isMuted=true; S.isListening=false;
-      updateMicBtn(); return;
-    }
-    // 'no-speech' and 'aborted' are expected — ignore
-    if(e.error!=='no-speech'&&e.error!=='aborted'){
-      addLog('error','ERROR','Mic error: '+e.error);
+    console.warn('[mic] recognition error', e?.error || e);
+    clearRecognitionTimers();
+    setListening(false);
+    if(typeof setListeningUi === 'function'){
+      setListeningUi(false,'Microphone idle.');
     }
   };
 
   rec.onend=()=>{
-    // Chrome's continuous recognition times out — restart automatically
-    if(S.isListening&&restartAllowed&&!S.isThinking&&!S.isSpeaking&&!S.isMuted){
-      setTimeout(()=>{
-        if(S.isListening&&!S.isThinking&&!S.isSpeaking&&!S.isMuted){
-          try{ rec.start(); }catch(err){
-            S.isListening=false;
-            updateMicBtn();
-          }
-        }
-      },80);
-    } else {
-      if(!S.isThinking&&!S.isSpeaking) S.isListening=false;
-      updateMicBtn();
+    console.log('[mic] recognition ended');
+    clearRecognitionTimers();
+    setListening(false);
+    if(typeof setListeningUi === 'function'){
+      if(stopReason !== 'silence-timeout'){
+        setListeningUi(false,'Microphone idle.');
+      }
     }
+    updateMicBtn();
   };
 
-  try{ rec.start(); }
-  catch(err){
-    S.isListening=false;
+  try{
+    rec.start();
+    console.log('[mic] recognition started');
+    startSilenceTimeout(rec, () => {
+      if(typeof setListeningUi === 'function'){
+        setListeningUi(false,'No speech detected, stopped listening.');
+      }
+    });
+    startMaxListenTimeout(rec);
+  } catch(err){
+    setListening(false);
     addLog('error','ERROR','Cannot start recognition: '+err.message);
     updateMicBtn();
   }

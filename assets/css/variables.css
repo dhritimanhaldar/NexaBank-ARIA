@@ -1,12 +1,66 @@
 :root {
- --bg0:#f7f7f8;--bg1:#ffffff;--bg2:#f3f4f6;--bg3:#e5e7eb;
- --border:#0000000f;--border2:#0000001a;
- --amber:#c1121f;--amber-dim:#c1121f14;
- --green:#6b7280;--green-dim:#6b728014;
- --red:#991b1b;--red-dim:#991b1b12;
- --blue:#6b7280;--blue-dim:#6b728012;
- --purple:#9ca3af;--purple-dim:#9ca3af15;
- --text:#111827;--text2:#4b5563;--text3:#9ca3af;
- --mono:'IBM Plex Mono',monospace;--display:'Syne',sans-serif;
- --r:10px;
+  /* Core HSBC palette */
+  --color-brand-red: #db0011;
+  --color-brand-black: #000000;
+  --color-brand-charcoal: #3a3a3a;
+  --color-brand-gray: #8f8f8f;
+  --color-brand-silver: #d9d9d9;
+  --color-brand-white: #ffffff;
+  --color-brand-offwhite: #f5f5f5;
+
+  /* App background + surfaces */
+  --color-bg: var(--color-brand-offwhite);
+  --color-surface: var(--color-brand-white);
+  --color-surface-alt: var(--color-brand-silver);
+  --color-surface-dark: var(--color-brand-charcoal);
+
+  /* Text */
+  --color-text: var(--color-brand-black);
+  --color-text-muted: var(--color-brand-charcoal);
+  --color-text-soft: var(--color-brand-gray);
+  --color-text-inverse: var(--color-brand-white);
+
+  /* Borders / lines */
+  --color-border: var(--color-brand-silver);
+  --color-divider: var(--color-brand-gray);
+
+  /* Brand actions */
+  --color-primary: var(--color-brand-red);
+  --color-primary-hover: #b3000e;
+  --color-primary-active: #8f000b;
+  --color-secondary: var(--color-brand-black);
+  --color-secondary-hover: #222222;
+  --color-secondary-active: #3a3a3a;
+
+  /* Role accents – keep within allowed palette only */
+  --color-accent-customer: var(--color-brand-black);
+  --color-accent-supervisor: var(--color-brand-charcoal);
+
+  /* Status colors */
+  --color-success: #2e7d32;
+  --color-warning: #f2b600;
+  --color-danger: var(--color-brand-red);
+
+  /* Status backgrounds */
+  --color-success-bg: #eaf6ec;
+  --color-warning-bg: #fff7db;
+  --color-danger-bg: #fdecee;
+
+  /* Focus / selection */
+  --color-focus-ring: rgba(219, 0, 17, 0.22);
+  --color-overlay: rgba(0, 0, 0, 0.5);
+
+  /* Existing app aliases - keep these for compatibility if older classes use them */
+  --bg-primary: var(--color-bg);
+  --bg-surface: var(--color-surface);
+  --bg-surface-alt: var(--color-surface-alt);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-muted);
+  --text-tertiary: var(--color-text-soft);
+  --accent-primary: var(--color-primary);
+  --accent-secondary: var(--color-secondary);
+  --border-color: var(--color-border);
+  --danger-color: var(--color-danger);
+  --warning-color: var(--color-warning);
+  --success-color: var(--color-success);
 }

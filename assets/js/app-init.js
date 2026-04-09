@@ -1,11 +1,97 @@
+function handleRoleSelection(role) {
+  console.log(`[role] selected: ${role}`);
+  setCurrentRole(role);
+
+  const roleGate = document.getElementById('roleGate');
+  if (roleGate) {
+    roleGate.style.display = 'none';
+  }
+
+  const micPermissionScreen = DOM.micPermissionScreen || document.getElementById('micPermissionScreen');
+  if (micPermissionScreen) {
+    micPermissionScreen.hidden = false;
+  }
+}
+
+async function handleMicPermissionClick() {
+  if (appState.micPermissionInFlight) return;
+  console.log('[mic] permission button clicked');
+
+  const role = appState.currentRole || appState.role;
+  if (!role) {
+    console.warn('[flow] no role selected before mic permission');
+    return;
+  }
+
+  setMicPermissionInFlight(true);
+  if (typeof setMicPermissionPending === 'function') {
+    setMicPermissionPending(true);
+  }
+
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+    console.log('[mic] permission granted');
+    setMicPermissionGranted(true);
+
+    if (typeof setListeningUi === 'function') {
+      setListeningUi(false, 'Microphone access granted.');
+    }
+
+    continueAfterMicPermission(role);
+  } catch (err) {
+    console.warn('[mic] permission denied', err);
+    setMicPermissionGranted(false);
+
+    if (typeof setListeningUi === 'function') {
+      setListeningUi(false, 'Microphone access blocked.');
+    }
+  } finally {
+    setMicPermissionInFlight(false);
+    if (typeof setMicPermissionPending === 'function') {
+      setMicPermissionPending(false);
+    }
+  }
+}
+
+function continueAfterMicPermission(role) {
+  console.log(`[flow] continue after permission for role: ${role}`);
+
+  const micPermissionScreen = DOM.micPermissionScreen || document.getElementById('micPermissionScreen');
+  if (micPermissionScreen) {
+    micPermissionScreen.hidden = true;
+  }
+
+  if (role === 'customer') {
+    return startCustomerFlow();
+  }
+
+  if (role === 'supervisor') {
+    return startSupervisorFlow();
+  }
+
+  console.warn('[flow] unknown role during post-permission continuation', role);
+}
+
+function startCustomerFlow() {
+  if (typeof enterAsCustomer === 'function') {
+    return enterAsCustomer();
+  }
+}
+
+function startSupervisorFlow() {
+  if (typeof enterAsSupervisor === 'function') {
+    return enterAsSupervisor();
+  }
+}
+
 (function(){
   if(typeof syncPermissionOverlayOnBoot === 'function'){
     syncPermissionOverlayOnBoot();
   }
 
   if(typeof addLog === 'function' && window.S){
-    addLog('system','SYSTEM',`NexaBank ARIA v3.0 · Session ${S.sessionId} · Hands-free voice mode`);
-    addLog('system','SYSTEM','Choose a role to enter the live session. Customer mode uses your microphone; supervisor mode is view-only.');
+    addLog('system','SYSTEM',`HSBC Global Banking Assistant · ARIA v3.0 · Session ${S.sessionId} · Hands-free voice mode`);
+    addLog('system','SYSTEM','Choose a role to enter the live HSBC session. Customer mode uses your microphone; supervisor mode is view-only.');
   }
 
   if(typeof drawFlat === 'function'){
@@ -18,6 +104,25 @@
 
   if(typeof bootRoleGate === 'function'){
     bootRoleGate();
+  }
+
+  const customerRoleButton = DOM.customerRoleButton || document.getElementById('customerRole');
+  const supervisorRoleButton = DOM.supervisorRoleButton || document.getElementById('supervisorRole');
+  const allowMicButton = DOM.allowMicButton || document.getElementById('allowMicrophoneBtn');
+
+  if (customerRoleButton && !customerRoleButton.dataset.bound) {
+    customerRoleButton.addEventListener('click', () => handleRoleSelection('customer'));
+    customerRoleButton.dataset.bound = 'true';
+  }
+
+  if (supervisorRoleButton && !supervisorRoleButton.dataset.bound) {
+    supervisorRoleButton.addEventListener('click', () => handleRoleSelection('supervisor'));
+    supervisorRoleButton.dataset.bound = 'true';
+  }
+
+  if (allowMicButton && !allowMicButton.dataset.bound) {
+    allowMicButton.addEventListener('click', handleMicPermissionClick);
+    allowMicButton.dataset.bound = 'true';
   }
 
   window.addEventListener('beforeunload', () => {
