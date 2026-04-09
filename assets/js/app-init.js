@@ -1,7 +1,6 @@
 function handleRoleSelection(role) {
   console.log(`[role] selected: ${role}`);
   setCurrentRole(role);
-  setActiveModal('mic-permission');
   showMicPermissionPrompt();
 
   // keep any existing screen-switching/navigation logic here
@@ -55,7 +54,6 @@ async function handleMicPermissionClick() {
 
 function closeMicPermissionUi() {
   hideMicPermissionPrompt();
-  setActiveModal(null);
 }
 
 function continueAfterMicPermission(role) {
