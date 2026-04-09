@@ -344,6 +344,8 @@ const S = {
   isSpeaking:   false,
   isMuted:      false,
   micReady:     false,
+  permissionAsked: localStorage.getItem('ariaMicPermissionAsked') === '1',
+  permissionGranted: localStorage.getItem('ariaMicPermissionGranted') === '1',
 
   sessionId: 'SES-'+Math.random().toString(36).slice(2,7).toUpperCase(),
   accounts:  { savings:124500, current:58200 },
@@ -365,6 +367,43 @@ const S = {
 };
 
 document.getElementById('sessionId').textContent = S.sessionId;
+
+function hidePermissionOverlay(){
+  const el = document.getElementById('permOverlay');
+  if(el) el.style.display = 'none';
+}
+
+function showPermissionOverlay(){
+  const el = document.getElementById('permOverlay');
+  if(el) el.style.display = 'flex';
+}
+
+function markMicPermissionAsked(){
+  S.permissionAsked = true;
+  localStorage.setItem('ariaMicPermissionAsked', '1');
+}
+
+function markMicPermissionGranted(){
+  S.permissionAsked = true;
+  S.permissionGranted = true;
+  localStorage.setItem('ariaMicPermissionAsked', '1');
+  localStorage.setItem('ariaMicPermissionGranted', '1');
+}
+
+function markMicPermissionDenied(){
+  S.permissionAsked = true;
+  localStorage.setItem('ariaMicPermissionAsked', '1');
+}
+
+function syncPermissionOverlayOnBoot(){
+  if(S.permissionGranted){
+    hidePermissionOverlay();
+  } else {
+    showPermissionOverlay();
+  }
+}
+
+syncPermissionOverlayOnBoot();
 
 // ─── LOCAL INTENT ENGINE ─────────────────────────────────
 const NLP = {
@@ -776,14 +815,15 @@ function actionLabel(a){
 // ─── MIC INIT (called once on permission grant) ───────────
 async function initMic(){
   if(S._stream && S.micReady){
-    showToast('ℹ️','Microphone is already initialized.');
+    hidePermissionOverlay();
+    updateMicBtn();
     return;
   }
 
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
     addLog('error','ERROR','Microphone capture is not supported by this browser.');
     showToast('⚠','Microphone capture is not supported by this browser.');
-    document.getElementById('permOverlay').style.display='none';
+    hidePermissionOverlay();
     updateMicBtn();
     return;
   }
@@ -791,13 +831,15 @@ async function initMic(){
   if(!window.isSecureContext && !['localhost','127.0.0.1'].includes(location.hostname)){
     addLog('error','ERROR','Microphone access requires HTTPS or localhost.');
     showToast('⚠','Microphone access requires HTTPS or localhost.');
-    document.getElementById('permOverlay').style.display='none';
+    hidePermissionOverlay();
     updateMicBtn();
     return;
   }
 
+  markMicPermissionAsked();
+
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio:{
         echoCancellation:true,
         noiseSuppression:true,
@@ -810,23 +852,28 @@ async function initMic(){
       throw new Error('No audio track obtained');
     }
 
-    S._stream=stream;
-    S.micReady=true;
-    document.getElementById('permOverlay').style.display='none';
+    S._stream = stream;
+    S.micReady = true;
+    markMicPermissionGranted();
+    hidePermissionOverlay();
+
     startWaveAlways(stream);
     addLog('system','SYSTEM','Microphone ready · Echo cancellation ON · Auto-listen active');
     updateMicBtn();
     showToast('✅','Microphone enabled.');
+
     speak("Hello! I'm ARIA, your NexaBank AI assistant. I can transfer money, pay bills, check balances, block cards, or send statements. How can I help you today?");
     scheduleAutoListen(500);
   }catch(err){
     const reason = err?.name || err?.message || 'Permission denied';
-    addLog('error','ERROR','Microphone init failed: '+reason);
-    showToast('⚠','Microphone access failed: '+(err.message||reason));
-    if(err.name==='NotAllowedError' || err.name==='PermissionDeniedError'){
-      document.getElementById('permOverlay').style.display='none';
+    addLog('error','ERROR','Microphone init failed: ' + reason);
+    showToast('⚠','Microphone access failed: ' + (err.message || reason));
+
+    if(err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
+      markMicPermissionDenied();
       setStatus('muted','MIC UNAVAILABLE');
     }
+
     updateMicBtn();
   }
 }
@@ -1003,12 +1050,24 @@ function scheduleAutoListen(delay=1000){
 
 // ─── MUTE TOGGLE ─────────────────────────────────────────
 function toggleMute(){
-  if(!S.micReady){ initMic(); return; }
-  S.isMuted=!S.isMuted;
+  if(!S.micReady){
+    if(S.permissionGranted){
+      initMic();
+      return;
+    }
+    showPermissionOverlay();
+    return;
+  }
+
+  S.isMuted = !S.isMuted;
+
   if(S.isMuted){
     cancelSpeech();
     stopListening();
-    if(S.autoListenTimer){ clearTimeout(S.autoListenTimer); S.autoListenTimer=null; }
+    if(S.autoListenTimer){
+      clearTimeout(S.autoListenTimer);
+      S.autoListenTimer = null;
+    }
     addLog('system','SYSTEM','Microphone muted by user.');
     setStatus('muted','MUTED');
   } else {
@@ -1016,6 +1075,7 @@ function toggleMute(){
     updateMicBtn();
     scheduleAutoListen(300);
   }
+
   updateMicBtn();
 }
 
@@ -1246,6 +1306,13 @@ addLog('system','SYSTEM',`NexaBank ARIA v3.0 · Session ${S.sessionId} · Hands-
 addLog('system','SYSTEM','Click "Allow Microphone" to start. Mic stays open — echo cancellation prevents self-listening.');
 drawFlat();
 updateMicBtn();
+
+if(S.permissionGranted){
+  hidePermissionOverlay();
+  setTimeout(() => {
+    initMic();
+  }, 50);
+}
 </script>
 </body>
 </html>
