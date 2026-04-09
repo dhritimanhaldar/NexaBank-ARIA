@@ -368,15 +368,87 @@ document.getElementById('sessionId').textContent = S.sessionId;
 
 // ─── LOCAL INTENT ENGINE ─────────────────────────────────
 const NLP = {
+  numberWords: {
+    zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9,
+    ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16,
+    seventeen:17, eighteen:18, nineteen:19,
+    twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90
+  },
+
+  parseWordNumber(text){
+    if(!text) return null;
+
+    const cleaned = String(text)
+      .toLowerCase()
+      .replace(/-/g,' ')
+      .replace(/\band\b/g,' ')
+      .replace(/\brupees?\b|\brs\.?\b|\binr\b/g,' ')
+      .replace(/\s+/g,' ')
+      .trim();
+
+    if(!cleaned) return null;
+
+    const tokens = cleaned.split(' ').filter(Boolean);
+    if(!tokens.length) return null;
+
+    const digitWords = ['zero','one','two','three','four','five','six','seven','eight','nine'];
+
+    if(tokens.every(t => digitWords.includes(t))){
+      return Number(tokens.map(t => this.numberWords[t]).join(''));
+    }
+
+    let total = 0;
+    let current = 0;
+    let seen = false;
+
+    for(const token of tokens){
+      if(this.numberWords[token] != null){
+        current += this.numberWords[token];
+        seen = true;
+        continue;
+      }
+
+      if(token === 'hundred'){
+        current = (current || 1) * 100;
+        seen = true;
+        continue;
+      }
+
+      if(token === 'thousand'){
+        total += (current || 1) * 1000;
+        current = 0;
+        seen = true;
+        continue;
+      }
+
+      if(token === 'lakh'){
+        total += (current || 1) * 100000;
+        current = 0;
+        seen = true;
+        continue;
+      }
+
+      return null;
+    }
+
+    const finalValue = total + current;
+    return seen && finalValue > 0 ? finalValue : null;
+  },
+
   amount(t){
     let m;
-    m=t.match(/(\d+\.?\d*)\s*lakh/i); if(m) return +m[1]*100000;
-    m=t.match(/(\d+\.?\d*)\s*thousand/i); if(m) return +m[1]*1000;
-    m=t.match(/(\d+\.?\d*)\s*k\b/i); if(m) return +m[1]*1000;
-    m=t.match(/(?:rs\.?|₹|inr)?\s*(\d[\d,]*\.?\d*)/i); if(m) return parseFloat(m[1].replace(/,/g,''));
-    m=t.match(/(\d[\d,]+)/); if(m) return parseFloat(m[1].replace(/,/g,''));
+    m = t.match(/(\d+\.?\d*)\s*lakh/i); if(m) return +m[1] * 100000;
+    m = t.match(/(\d+\.?\d*)\s*thousand/i); if(m) return +m[1] * 1000;
+    m = t.match(/(\d+\.?\d*)\s*k\b/i); if(m) return +m[1] * 1000;
+    m = t.match(/(?:rs\.?|₹|inr)?\s*(\d[\d,]*\.?\d*)/i); if(m) return parseFloat(m[1].replace(/,/g,''));
+    m = t.match(/(\d[\d,]+)/); if(m) return parseFloat(m[1].replace(/,/g,''));
+
+    const wordsValue = this.parseWordNumber(t);
+    if(wordsValue != null) return wordsValue;
+
     return null;
   },
+
   name(t){
     const sw=['my','the','a','an','from','to','savings','current','account','balance','rupees','rs','inr'];
     const m=t.match(/(?:to|pay|send|transfer\s+(?:to)?)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i);
@@ -384,33 +456,48 @@ const NLP = {
     const n=m[1].trim().split(/\s+/).filter(w=>!sw.includes(w.toLowerCase())).join(' ');
     return n.length>1?n.charAt(0).toUpperCase()+n.slice(1):null;
   },
+
   account(t){
     if(/current|biz|business/.test(t)) return 'current';
     return 'savings';
   },
+
   biller(t){
     const types=['electricity','electric','water','gas','internet','broadband','mobile','phone','insurance','credit card','emi','rent','school','college','fees'];
     for(const b of types) if(t.toLowerCase().includes(b)) return b.charAt(0).toUpperCase()+b.slice(1);
     const m=t.match(/pay\s+(?:the\s+)?([a-z\s]+?)\s+bill/i);
-    return m?m[1].trim().charAt(0).toUpperCase()+m[1].trim().slice(1):'Bill';
+    return m ? m[1].trim().charAt(0).toUpperCase()+m[1].trim().slice(1) : 'Bill';
   },
+
   classify(text){
-    const t=text.toLowerCase();
-    if(/\b(transfer|send|wire|remit|neft|imps|upi|move)\b/.test(t)&&!/bill/.test(t))
-      return{intent:'transfer',amount:this.amount(t),to:this.name(text),account:this.account(t)};
-    if(/\b(pay|payment|settle|clear)\b.*\bbill\b/.test(t)||/\b(pay|settle)\s+(electricity|water|gas|internet|mobile|phone|insurance|rent|emi|fees)\b/.test(t))
-      return{intent:'pay_bill',amount:this.amount(t),biller:this.biller(text),account:this.account(t)};
-    if(/\b(balance|how much|available amount)\b/.test(t)&&!/send|transfer|pay/.test(t))
-      return{intent:'check_balance',account:/current/.test(t)?'current':/savings/.test(t)?'savings':'both'};
-    if(/\b(block|freeze|lock|disable|lost|stolen|cancel)\b.*\b(card|debit|credit)\b/.test(t)||/\b(card|debit)\b.*\b(block|lost|stolen|freeze)\b/.test(t))
-      return{intent:'block_card',account:this.account(t)};
+    const t = text.toLowerCase().trim();
+    if(/\b(thank you|thanks|thankyou|many thanks|thanks a lot)\b/.test(t)) return { intent:'gratitude' };
+    if(/\b(sorry|i am sorry|i'm sorry|apologies|my apologies)\b/.test(t)) return { intent:'apology' };
+    if(/\b(please|excuse me|pardon me|kindly)\b/.test(t) && t.split(/\s+/).length <= 4) return { intent:'courtesy' };
+    if(/\b(good morning|good afternoon|good evening)\b/.test(t)) return { intent:'greeting_time' };
+    if(/\b(bye|goodbye|see you|talk to you later|catch you later)\b/.test(t)) return { intent:'farewell' };
+
+    if(/\b(transfer|send|wire|remit|neft|imps|upi|move)\b/.test(t) && !/bill/.test(t))
+      return { intent:'transfer', amount:this.amount(text), to:this.name(text), account:this.account(t) };
+
+    if(/\b(pay|payment|settle|clear)\b.*\bbill\b/.test(t) || /\b(pay|settle)\s+(electricity|water|gas|internet|mobile|phone|insurance|rent|emi|fees)\b/.test(t))
+      return { intent:'pay_bill', amount:this.amount(text), biller:this.biller(text), account:this.account(t) };
+
+    if(/\b(balance|how much|available amount)\b/.test(t) && !/send|transfer|pay/.test(t))
+      return { intent:'check_balance', account:/current/.test(t)?'current':/savings/.test(t)?'savings':'both' };
+
+    if(/\b(block|freeze|lock|disable|lost|stolen|cancel)\b.*\b(card|debit|credit)\b/.test(t) || /\b(card|debit)\b.*\b(block|lost|stolen|freeze)\b/.test(t))
+      return { intent:'block_card', account:this.account(t) };
+
     if(/\b(statement|passbook|history|mini statement)\b/.test(t)){
       const m=t.match(/(\d+|last|three|six|one|two)\s*months?/);
-      return{intent:'request_statement',period:m?m[0]:'last month',account:this.account(t)};
+      return { intent:'request_statement', period:m?m[0]:'last month', account:this.account(t) };
     }
-    if(/\b(hi|hello|hey|good morning|good afternoon|namaste)\b/.test(t)) return{intent:'greeting'};
-    if(/\b(help|what can you|how do|options|menu)\b/.test(t)) return{intent:'help'};
-    return{intent:'unknown'};
+
+    if(/\b(hi|hello|hey|namaste)\b/.test(t)) return { intent:'greeting' };
+    if(/\b(help|what can you|how do|options|menu)\b/.test(t)) return { intent:'help' };
+
+    return { intent:'unknown' };
   }
 };
 
@@ -490,8 +577,25 @@ function respond(text){
       spoken:`Your ${account} statement for ${period||'last month'} has been sent to your registered email address.`};
   if(intent==='greeting')
     return{action:null,spoken:"Hello! I'm ARIA, your NexaBank AI assistant. I can transfer money, pay bills, check balances, block cards, or send statements. What can I do for you?"};
+
+  if(intent==='greeting_time')
+    return{action:null,spoken:"Good to hear from you. How may I help you with your banking today?"};
+
+  if(intent==='gratitude')
+    return{action:null,spoken:"You're most welcome. Is there anything else I can help you with today?"};
+
+  if(intent==='apology')
+    return{action:null,spoken:"No worries at all. Please go ahead — I'm here to help."};
+
+  if(intent==='courtesy')
+    return{action:null,spoken:"Of course. Please tell me what you'd like me to do."};
+
+  if(intent==='farewell')
+    return{action:null,spoken:"You're welcome. Take care, and feel free to come back anytime you need help."};
+
   if(intent==='help')
     return{action:null,spoken:"I can help with: transferring money, paying bills, checking balances, blocking a lost card, or requesting statements. Just say or type what you need!"};
+
   return{action:'unknown',status:'info',amtClass:'neutral',amount:'—',
     detail:`Input: "${text.slice(0,40)}"`,
     spoken:"I didn't quite understand that. I can transfer money, pay bills, check balances, block cards, or send statements — could you rephrase?"};
