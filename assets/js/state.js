@@ -13,6 +13,7 @@ const S = {
   maxListenTimeoutId: null,
   hasDetectedSpeech: false,
   micPermissionInFlight: false,
+  activeModal: null,
 
   sessionId: 'SES-'+Math.random().toString(36).slice(2,7).toUpperCase(),
   accounts:  { savings:124500, current:58200 },
@@ -92,6 +93,10 @@ function setMicPermissionInFlight(value) {
   S.micPermissionInFlight = Boolean(value);
 }
 
+function setActiveModal(value) {
+  S.activeModal = value;
+}
+
 window.appState = S;
 window.setCurrentRole = setCurrentRole;
 window.setMicPermissionGranted = setMicPermissionGranted;
@@ -99,4 +104,5 @@ window.setListening = setListening;
 window.clearRecognitionTimers = clearRecognitionTimers;
 window.resetSpeechFlags = resetSpeechFlags;
 window.setMicPermissionInFlight = setMicPermissionInFlight;
+window.setActiveModal = setActiveModal;
 window.S = S;
