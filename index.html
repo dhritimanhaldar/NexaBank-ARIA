@@ -8,16 +8,16 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <style>
 :root {
-  --bg0:#07080d;--bg1:#0d0f18;--bg2:#121622;--bg3:#181d2c;
-  --border:#ffffff0f;--border2:#ffffff1a;
-  --amber:#f0a500;--amber-dim:#f0a50022;
-  --green:#00c896;--green-dim:#00c89615;
-  --red:#ff4d6d;--red-dim:#ff4d6d15;
-  --blue:#4d9fff;--blue-dim:#4d9fff12;
-  --purple:#a855f7;--purple-dim:#a855f715;
-  --text:#d4daf5;--text2:#7880a8;--text3:#3d4468;
-  --mono:'IBM Plex Mono',monospace;--display:'Syne',sans-serif;
-  --r:10px;
+ --bg0:#f7f7f8;--bg1:#ffffff;--bg2:#f3f4f6;--bg3:#e5e7eb;
+ --border:#0000000f;--border2:#0000001a;
+ --amber:#c1121f;--amber-dim:#c1121f14;
+ --green:#6b7280;--green-dim:#6b728014;
+ --red:#991b1b;--red-dim:#991b1b12;
+ --blue:#6b7280;--blue-dim:#6b728012;
+ --purple:#9ca3af;--purple-dim:#9ca3af15;
+ --text:#111827;--text2:#4b5563;--text3:#9ca3af;
+ --mono:'IBM Plex Mono',monospace;--display:'Syne',sans-serif;
+ --r:10px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden}
@@ -202,11 +202,11 @@ table.ledger tr.new-tx td{animation:txfl 1.8s ease}
 <!-- Microphone permission overlay (shown until mic is granted) -->
 <div class="perm-overlay" id="permOverlay">
   <div class="perm-box">
-    <div class="perm-icon">🎤</div>
+    <div class="perm-icon">MIC</div>
     <div class="perm-title">Enable Microphone</div>
     <div class="perm-sub">ARIA needs one-time microphone access to listen to you hands-free. The mic stays open so you never have to click again.</div>
     <button class="perm-btn" onclick="initMic()">Allow Microphone</button>
-    <div class="perm-note">🔒 Echo cancellation · No data leaves your browser</div>
+    <div class="perm-note">Secure local audio · No data leaves your browser</div>
   </div>
 </div>
 
@@ -220,7 +220,7 @@ table.ledger tr.new-tx td{animation:txfl 1.8s ease}
     </div>
   </div>
   <div class="topbar-right">
-    <div class="local-badge">⚡ RUNS LOCALLY · NO API KEY</div>
+    <div class="local-badge">RUNS LOCALLY · NO API KEY</div>
     <div class="pill"><div class="dot live" id="statusDot"></div><span id="statusLabel">READY</span></div>
     <div class="pill">SESSION <span id="sessionId" style="color:var(--text);margin-left:4px">—</span></div>
     <div class="pill">TXN <span id="txnCount" style="color:var(--amber);margin-left:4px">0</span></div>
@@ -235,7 +235,7 @@ table.ledger tr.new-tx td{animation:txfl 1.8s ease}
       <div class="aria-visual">
         <div class="aria-orb-wrap">
           <svg viewBox="0 0 64 64"><circle class="orb-base" cx="32" cy="32" r="31"/><circle class="orb-ring" id="ring1" cx="32" cy="32" r="27"/><circle class="orb-ring2" id="ring2" cx="32" cy="32" r="22"/></svg>
-          <div class="orb-face" id="orbFace">🤖</div>
+          <div class="orb-face" id="orbFace">AI</div>
         </div>
         <div>
           <div class="aria-name">ARIA</div>
@@ -248,7 +248,7 @@ table.ledger tr.new-tx td{animation:txfl 1.8s ease}
     <!-- Waveform — always on -->
     <div class="wave-wrap">
       <canvas id="waveCanvas"></canvas>
-      <span class="mic-always-on" id="micAlwaysOn">●REC</span>
+      <span class="mic-always-on" id="micAlwaysOn">REC</span>
     </div>
 
     <!-- VAD silence countdown bar -->
@@ -257,7 +257,7 @@ table.ledger tr.new-tx td{animation:txfl 1.8s ease}
     <!-- Mute / unmute button (replaces push-to-speak) -->
     <div class="mic-wrap">
       <button class="mic-btn" id="micBtn" onclick="toggleMute()">
-        <span id="micIcon">🎙</span><span id="micLabel">Initializing mic…</span>
+        <span id="micIcon">MIC</span><span id="micLabel">Initializing mic…</span>
       </button>
     </div>
 
@@ -268,7 +268,7 @@ table.ledger tr.new-tx td{animation:txfl 1.8s ease}
 
     <div class="manual-wrap">
       <input class="manual-input" id="manualInput" type="text" placeholder="Or type your request here…" onkeydown="if(event.key==='Enter')sendManual()"/>
-      <button class="manual-send" onclick="sendManual()">→</button>
+      <button class="manual-send" onclick="sendManual()">SEND</button>
     </div>
 
     <div class="hints">
@@ -373,6 +373,7 @@ const S = {
   vadSpeechDetected: false,
   vadSilenceStart:   null,
     pendingTransaction: null,  // stores incomplete transaction details
+  pendingTask: null,
 };
 
 document.getElementById('sessionId').textContent = S.sessionId;
@@ -511,10 +512,23 @@ const NLP = {
   },
 
   biller(t){
-    const types=['electricity','electric','water','gas','internet','broadband','mobile','phone','insurance','credit card','emi','rent','school','college','fees'];
-    for(const b of types) if(t.toLowerCase().includes(b)) return b.charAt(0).toUpperCase()+b.slice(1);
-    const m=t.match(/pay\s+(?:the\s+)?([a-z\s]+?)\s+bill/i);
-    return m ? m[1].trim().charAt(0).toUpperCase()+m[1].trim().slice(1) : 'Bill';
+    const s = String(t || '').toLowerCase();
+
+    if(/\belectricity\b|\belectric\b/.test(s)) return 'Electricity';
+    if(/\bwater\b/.test(s)) return 'Water';
+    if(/\bgas\b/.test(s)) return 'Gas';
+    if(/\binternet\b|\bbroadband\b/.test(s)) return 'Internet';
+    if(/\bmobile\b|\bphone\b/.test(s)) return 'Mobile';
+    if(/\binsurance\b/.test(s)) return 'Insurance';
+    if(/\brent\b/.test(s)) return 'Rent';
+    if(/\bemi\b/.test(s)) return 'EMI';
+    if(/\bcredit card\b/.test(s)) return 'Credit Card';
+    if(/\bschool\b|\bcollege\b|\bfees\b/.test(s)) return 'Fees';
+
+    const m = s.match(/pay\s+(?:the\s+)?([a-z\s]+?)\s+bill/i);
+    if(m) return m[1].trim().charAt(0).toUpperCase() + m[1].trim().slice(1);
+
+    return 'Bill';
   },
 
   classify(text){
@@ -547,7 +561,12 @@ const NLP = {
     if(/\b(transfer|send|wire|remit|neft|imps|upi|move)\b/.test(t) && !/bill/.test(t))
       return { intent:'transfer', amount:this.amount(text), to:this.name(text), account:this.account(t) };
 
-    if(/\b(pay|payment|settle|clear)\b.*\bbill\b/.test(t) || /\b(pay|settle)\s+(electricity|water|gas|internet|mobile|phone|insurance|rent|emi|fees)\b/.test(t))
+    if(
+      /\b(pay|payment|settle|clear)\b.*\bbill\b/.test(t) ||
+      /\b(pay|settle)\s+(electricity|water|gas|internet|mobile|phone|insurance|rent|emi|fees)\b/.test(t) ||
+      /\b(electricity|water|gas|internet|mobile|phone|insurance|rent|emi)\s+bill\b/.test(t) ||
+      /\bbill payment\b/.test(t)
+    )
       return { intent:'pay_bill', amount:this.amount(text), biller:this.biller(text), account:this.account(t) };
 
     if(/\b(balance|how much|available amount)\b/.test(t) && !/send|transfer|pay/.test(t))
@@ -701,13 +720,19 @@ function respond(text){
   }
 
   if(intent === 'pay_bill'){
+    if(!amount && !biller) return {
+      action:null,
+      spoken:"Sure, I can help with a bill payment. Which bill would you like to pay, and how much would you like to pay?"
+    };
+
     if(!amount) return {
-      action:'payment',
-      status:'pending',
-      amtClass:'neutral',
-      amount:'—',
-      detail:`Biller: ${biller || 'Unknown'}`,
-      spoken:`I've noted your ${biller || 'bill'} payment. Could you confirm the amount?`
+      action:null,
+      spoken:`Okay, I can help with your ${biller || 'bill'}. How much would you like to pay?`
+    };
+
+    if(!biller) return {
+      action:null,
+      spoken:`Okay, I understand you want to pay ${fmt(amount)}. Which bill would you like to pay?`
     };
 
     if(amount > srcBal) return {
@@ -724,9 +749,9 @@ function respond(text){
       status:'success',
       amtClass:'debit',
       amount:fmt(amount),
-      detail:`Biller: ${biller || 'Bill'} | From: ${cap(account)}`,
+      detail:`Biller: ${biller} | From: ${cap(account)}`,
       debit:{ acct:account, amt:amount },
-      spoken:`${biller || 'Bill'} payment of ${fmt(amount)} processed successfully from your ${account} account.`
+      spoken:`Your ${biller} bill payment of ${fmt(amount)} has been processed successfully from your ${account} account.`
     };
   }
 
@@ -881,6 +906,207 @@ function respond(text){
   };
 }
 
+function isCancelIntent(text){
+  return /\b(cancel|stop|nevermind|never mind|forget it|do not proceed|don't proceed|dont proceed|cancel transaction|stop transaction)\b/i.test(String(text || ''));
+}
+
+function buildAmountText(amount){
+  return '₹ ' + Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+}
+
+function extractLooseRecipient(input){
+  if(!input) return null;
+
+  const direct = NLP.name(input);
+  if(direct) return direct;
+
+  const cleaned = String(input)
+    .replace(/\b(send|transfer|pay|money|bill|rupees?|rs\.?|inr|to|for|from|account|please|upi|neft|imps|amount|electricity|water|gas|internet|mobile|phone)\b/gi,' ')
+    .replace(/[^a-zA-Z\s]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+
+  if(!cleaned) return null;
+
+  const words = cleaned.split(' ').filter(Boolean);
+  if(words.length >= 1 && words.length <= 3){
+    return words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  }
+
+  return null;
+}
+
+function extractLooseBiller(input){
+  if(!input) return null;
+  const t = String(input).toLowerCase();
+
+  if(/\belectricity\b|\belectric\b/.test(t)) return 'Electricity';
+  if(/\bwater\b/.test(t)) return 'Water';
+  if(/\bgas\b/.test(t)) return 'Gas';
+  if(/\binternet\b|\bbroadband\b/.test(t)) return 'Internet';
+  if(/\bmobile\b|\bphone\b/.test(t)) return 'Mobile';
+  if(/\binsurance\b/.test(t)) return 'Insurance';
+  if(/\brent\b/.test(t)) return 'Rent';
+  if(/\bemi\b/.test(t)) return 'EMI';
+  if(/\bcredit card\b/.test(t)) return 'Credit Card';
+
+  const fromNlp = NLP.biller(input);
+  if(fromNlp && fromNlp !== 'Bill') return fromNlp;
+
+  return null;
+}
+
+function inferIntentFromText(text){
+  const parsed = NLP.classify(text);
+  if(parsed.intent === 'transfer' || parsed.intent === 'pay_bill') return parsed.intent;
+
+  const t = String(text || '').toLowerCase();
+  if(/\b(transfer|send|remit|wire|upi|neft|imps)\b/.test(t)) return 'transfer';
+  if(/\b(pay|payment|bill|electricity|water|gas|internet|mobile|phone|insurance|rent|emi)\b/.test(t)) return 'pay_bill';
+
+  return null;
+}
+
+function createOrMergePendingTask(existingTask, text){
+  const parsed = NLP.classify(text);
+  const task = existingTask ? { ...existingTask } : {
+    intent: null,
+    amount: null,
+    recipient: null,
+    biller: null,
+    account: null,
+    originalText: ''
+  };
+
+  task.originalText = [task.originalText, String(text || '').trim()].filter(Boolean).join(' ').trim();
+
+  if(!task.intent){
+    task.intent = inferIntentFromText(text);
+  }
+
+  if(!task.amount){
+    const amt = NLP.amount(text);
+    if(amt != null) task.amount = amt;
+  }
+
+  if(!task.account){
+    if(/\bcurrent\b|\bbusiness\b|\bbiz\b/i.test(text)) task.account = 'current';
+    else if(/\bsavings\b/i.test(text)) task.account = 'savings';
+  }
+
+  if(task.intent === 'transfer' && !task.recipient){
+    const name = extractLooseRecipient(text);
+    if(name) task.recipient = name;
+  }
+
+  if(task.intent === 'pay_bill' && !task.biller){
+    const biller = extractLooseBiller(text);
+    if(biller) task.biller = biller;
+  }
+
+  if(!task.intent){
+    if(task.recipient) task.intent = 'transfer';
+    if(task.biller) task.intent = 'pay_bill';
+  }
+
+  if(!task.account) task.account = 'savings';
+
+  return task;
+}
+
+function isPendingTaskComplete(task){
+  if(!task || !task.intent) return false;
+  if(task.intent === 'transfer') return !!(task.amount && task.recipient);
+  if(task.intent === 'pay_bill') return !!(task.amount && task.biller);
+  return false;
+}
+
+function buildPendingTaskPrompt(task, retry=false){
+  if(!task || !task.intent){
+    return retry
+      ? 'I still need a little more information. Would you like to transfer money or pay a bill?'
+      : 'Sure, I can help with that. Would you like to transfer money or pay a bill?';
+  }
+
+  if(task.intent === 'transfer'){
+    if(task.amount && !task.recipient){
+      return retry
+        ? `I still need the recipient name. You want to send ${buildAmountText(task.amount)}. Whom would you like to send it to?`
+        : `Okay, I understand you want to send ${buildAmountText(task.amount)}. Whom would you like to send it to?`;
+    }
+    if(!task.amount && task.recipient){
+      return retry
+        ? `I still need the amount. I will send money to ${task.recipient}. How much should you send?`
+        : `Okay, I will send money to ${task.recipient}. How much should you send?`;
+    }
+    return retry
+      ? `I still need the recipient name and amount. Whom would you like to send it to, and how much should you send?`
+      : `Sure, I can help with that. Whom would you like to send it to, and how much should you send?`;
+  }
+
+  if(task.intent === 'pay_bill'){
+    if(task.biller && !task.amount){
+      return retry
+        ? `I still need the amount for the ${task.biller} bill. How much would you like to pay?`
+        : `Okay, I can help with your ${task.biller} bill. How much would you like to pay?`;
+    }
+    if(!task.biller && task.amount){
+      return retry
+        ? `I still need the bill type. You want to pay ${buildAmountText(task.amount)}. Which bill would you like to pay?`
+        : `Okay, I understand you want to pay ${buildAmountText(task.amount)}. Which bill would you like to pay?`;
+    }
+    return retry
+      ? 'I still need the bill type and amount. For example, you can say pay electricity bill 1200. Which bill would you like to pay, and how much should you pay?'
+      : 'Sure, I can help with a bill payment. Which bill would you like to pay, and how much would you like to pay?';
+  }
+
+  return 'Please tell me a little more so I can help correctly.';
+}
+
+function buildPendingTaskDetail(task){
+  if(!task) return 'Pending task updated.';
+  const missing = [];
+  if(task.intent === 'transfer'){
+    if(!task.recipient) missing.push('recipient name');
+    if(!task.amount) missing.push('amount');
+    return `Pending transfer updated. Still missing: ${missing.join(', ') || 'nothing'}`;
+  }
+  if(task.intent === 'pay_bill'){
+    if(!task.biller) missing.push('bill type');
+    if(!task.amount) missing.push('amount');
+    return `Pending bill payment updated. Still missing: ${missing.join(', ') || 'nothing'}`;
+  }
+  return 'Pending task updated.';
+}
+
+function buildCompletionCommand(task){
+  if(task.intent === 'transfer'){
+    return `transfer ${task.amount} to ${task.recipient} from ${task.account || 'savings'}`;
+  }
+  if(task.intent === 'pay_bill'){
+    return `pay ${task.biller} bill ${task.amount} from ${task.account || 'savings'}`;
+  }
+  return null;
+}
+
+function speakPendingResponse(rawText, spoken, detailText){
+  stopListening(true);
+  S.isThinking = true;
+  document.getElementById('transcriptText').textContent = rawText;
+  addLog('user','You',rawText);
+  showThinking(true);
+  setStatus('thinking','THINKING');
+  setOrbSpin(false);
+
+  setTimeout(() => {
+    showThinking(false);
+    S.isThinking = false;
+    addLog('aria','ARIA',spoken);
+    if(detailText) addLog('system','SYSTEM',detailText);
+    speak(spoken);
+  }, 350);
+}
+
 // ─── PROCESS INPUT ────────────────────────────────────────
 function processInput(text){
   if(S.isThinking) return;
@@ -890,130 +1116,46 @@ function processInput(text){
 
   const fmt = n => '₹ ' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2 });
 
-  function extractLooseAmount(input){
-    return NLP.amount(input);
-  }
-
-  function extractLooseRecipient(input){
-    if(!input) return null;
-
-    const direct = NLP.name(input);
-    if(direct) return direct;
-
-    const cleaned = input
-      .replace(/\b(send|transfer|pay|money|rupees?|rs\.?|inr|to|for|from|account|please|upi|neft|imps|amount)\b/gi,' ')
-      .replace(/[^a-zA-Z\s]/g,' ')
-      .replace(/\s+/g,' ')
-      .trim();
-
-    if(!cleaned) return null;
-
-    const words = cleaned.split(' ').filter(Boolean);
-    if(words.length >= 1 && words.length <= 3){
-      return words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-    }
-
-    return null;
-  }
-
-  function buildTransferFollowup(txn, retry=false){
-    const hasAmount = !!txn.amount;
-    const hasRecipient = !!txn.recipient;
-
-    if(hasAmount && !hasRecipient){
-      return retry
-        ? `I still need the recipient name. You want to send ${fmt(txn.amount)}. Whom would you like to send it to?`
-        : `Okay, I understand you want to send ${fmt(txn.amount)}. Whom would you like to send it to?`;
-    }
-
-    if(!hasAmount && hasRecipient){
-      return retry
-        ? `I still need the amount. I will send money to ${txn.recipient}. How much should I send?`
-        : `Okay, I will send money to ${txn.recipient}. How much should I send?`;
-    }
-
-    return retry
-      ? `I still need the recipient name and the amount. Whom would you like to send it to, and how much should I send?`
-      : `Sure, I can help with that. Whom would you like to send it to, and how much should I send?`;
-  }
-
-  function speakPendingResponse(spoken, detailText){
-    stopListening(true);
-    S.isThinking = true;
-    document.getElementById('transcriptText').textContent = rawText;
-    addLog('user','You',rawText);
-    showThinking(true);
-    setStatus('thinking','THINKING');
-    setOrbSpin(false);
-
-    setTimeout(() => {
-      showThinking(false);
-      S.isThinking = false;
-      addLog('aria','ARIA',spoken);
-      if(detailText){
-        addLog('system','SYSTEM',detailText);
-      }
-      speak(spoken);
-    }, 350);
-  }
-
   const cancelWords = /\b(cancel|stop|do not proceed|don't proceed|dont proceed|cancel transaction|nevermind|never mind)\b/i;
 
-  if(cancelWords.test(rawText) && S.pendingTransaction){
+  if(isCancelIntent(rawText) && (S.pendingTask || S.pendingTransaction)){
+    S.pendingTask = null;
     S.pendingTransaction = null;
     const spoken = "Okay, I've cancelled that transaction. How else can I help you?";
-    speakPendingResponse(spoken, 'Pending transaction cancelled.');
+    speakPendingResponse(rawText, spoken, 'Pending task cancelled.');
     return;
   }
 
-  if(S.pendingTransaction && S.pendingTransaction.intent === 'transfer'){
-    const txn = S.pendingTransaction;
+  if(S.pendingTask){
+    S.pendingTask = createOrMergePendingTask(S.pendingTask, rawText);
 
-    if(!txn.amount){
-      const foundAmount = extractLooseAmount(rawText);
-      if(foundAmount) txn.amount = foundAmount;
-    }
-
-    if(!txn.recipient){
-      const foundRecipient = extractLooseRecipient(rawText);
-      if(foundRecipient) txn.recipient = foundRecipient;
-    }
-
-    if(txn.amount && txn.recipient){
-      const account = txn.account || 'savings';
-      const completeText = `transfer ${txn.amount} to ${txn.recipient} from ${account}`;
+    if(isPendingTaskComplete(S.pendingTask)){
+      const completeText = buildCompletionCommand(S.pendingTask);
+      const completedIntent = S.pendingTask.intent;
       S.pendingTransaction = null;
-      addLog('system','SYSTEM',`Completing pending transfer: ${completeText}`);
+      S.pendingTask = null;
+      addLog('system','SYSTEM',`Completing pending ${completedIntent === 'pay_bill' ? 'bill payment' : 'transfer'}: ${completeText}`);
       processInput(completeText);
       return;
     }
 
-    const spoken = buildTransferFollowup(txn, true);
-    const missing = [];
-    if(!txn.recipient) missing.push('recipient name');
-    if(!txn.amount) missing.push('amount');
-    speakPendingResponse(spoken, `Pending transfer updated. Still missing: ${missing.join(', ')}`);
+    const spoken = buildPendingTaskPrompt(S.pendingTask, true);
+    const detail = buildPendingTaskDetail(S.pendingTask);
+    speakPendingResponse(rawText, spoken, detail);
     return;
   }
 
   const parsed = NLP.classify(rawText);
 
-  if(parsed.intent === 'transfer'){
-    const pendingTxn = {
-      intent: 'transfer',
-      amount: parsed.amount || null,
-      recipient: parsed.to || null,
-      account: parsed.account || 'savings',
-      originalText: rawText
-    };
+  if(parsed.intent === 'transfer' || parsed.intent === 'pay_bill'){
+    const initialTask = createOrMergePendingTask(null, rawText);
 
-    if(!pendingTxn.amount || !pendingTxn.recipient){
-      S.pendingTransaction = pendingTxn;
-      const spoken = buildTransferFollowup(pendingTxn, false);
-      const missing = [];
-      if(!pendingTxn.recipient) missing.push('recipient name');
-      if(!pendingTxn.amount) missing.push('amount');
-      speakPendingResponse(spoken, `Pending transfer created. Missing: ${missing.join(', ')}`);
+    if(!isPendingTaskComplete(initialTask)){
+      S.pendingTask = initialTask;
+      S.pendingTransaction = initialTask.intent === 'transfer' ? initialTask : null;
+      const spoken = buildPendingTaskPrompt(initialTask, false);
+      const detail = buildPendingTaskDetail(initialTask);
+      speakPendingResponse(rawText, spoken, detail);
       return;
     }
   }
@@ -1063,7 +1205,7 @@ async function initMic(){
 
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
     addLog('error','ERROR','Microphone capture is not supported by this browser.');
-    showToast('⚠','Microphone capture is not supported by this browser.');
+    showToast('ERR','Microphone capture is not supported by this browser.');
     hidePermissionOverlay();
     updateMicBtn();
     return;
@@ -1071,7 +1213,7 @@ async function initMic(){
 
   if(!window.isSecureContext && !['localhost','127.0.0.1'].includes(location.hostname)){
     addLog('error','ERROR','Microphone access requires HTTPS or localhost.');
-    showToast('⚠','Microphone access requires HTTPS or localhost.');
+    showToast('ERR','Microphone access requires HTTPS or localhost.');
     hidePermissionOverlay();
     updateMicBtn();
     return;
@@ -1101,14 +1243,14 @@ async function initMic(){
     startWaveAlways(stream);
     addLog('system','SYSTEM','Microphone ready · Echo cancellation ON · Auto-listen active');
     updateMicBtn();
-    showToast('✅','Microphone enabled.');
+    showToast('OK','Microphone enabled.');
 
     speak("Hello! I'm ARIA, your NexaBank AI assistant. I can transfer money, pay bills, check balances, block cards, or send statements. How can I help you today?");
     scheduleAutoListen(500);
   }catch(err){
     const reason = err?.name || err?.message || 'Permission denied';
     addLog('error','ERROR','Microphone init failed: ' + reason);
-    showToast('⚠','Microphone access failed: ' + (err.message || reason));
+    showToast('ERR','Microphone access failed: ' + (err.message || reason));
 
     if(err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
       markMicPermissionDenied();
@@ -1124,7 +1266,7 @@ function startListening(){
   if(!S.micReady||S.isMuted||S.isThinking||S.isSpeaking||S.isListening) return;
 
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ showToast('⚠','Speech API not supported. Use Chrome.'); return; }
+  if(!SR){ showToast('ERR','Speech API not supported. Use Chrome.'); return; }
 
   S.isListening=true;
   S.pendingFinal='';
@@ -1184,7 +1326,7 @@ function startListening(){
 
   rec.onerror=(e)=>{
     if(e.error==='not-allowed'){
-      showToast('⚠','Microphone access denied.');
+      showToast('ERR','Microphone access denied.');
       S.isMuted=true; S.isListening=false;
       updateMicBtn(); return;
     }
@@ -1326,18 +1468,18 @@ function updateMicBtn(){
   const label=document.getElementById('micLabel');
   btn.className='mic-btn';
   if(!S.micReady){
-    icon.textContent='🎤'; label.textContent='Initializing mic…';
+    icon.textContent='MIC'; label.textContent='Initializing mic…';
   } else if(S.isMuted){
     btn.classList.add('muted');
-    icon.textContent='🔇'; label.textContent='Muted — Click to Unmute';
+    icon.textContent='OFF'; label.textContent='Muted — Click to Unmute';
   } else if(S.isSpeaking){
     btn.classList.add('speaking');
-    icon.textContent='🔊'; label.textContent='ARIA Speaking — Click to Interrupt';
+    icon.textContent='AI'; label.textContent='ARIA Speaking — Click to Interrupt';
   } else if(S.isListening){
     btn.classList.add('listening');
-    icon.textContent='🎙'; label.textContent='Listening… Speak now';
+    icon.textContent='LIVE'; label.textContent='Listening… Speak now';
   } else {
-    icon.textContent='🎙'; label.textContent='Auto-listen Active — Click to Mute';
+    icon.textContent='MIC'; label.textContent='Auto-listen Active — Click to Mute';
   }
 }
 
