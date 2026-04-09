@@ -1,0 +1,12 @@
+:root {
+ --bg0:#f7f7f8;--bg1:#ffffff;--bg2:#f3f4f6;--bg3:#e5e7eb;
+ --border:#0000000f;--border2:#0000001a;
+ --amber:#c1121f;--amber-dim:#c1121f14;
+ --green:#6b7280;--green-dim:#6b728014;
+ --red:#991b1b;--red-dim:#991b1b12;
+ --blue:#6b7280;--blue-dim:#6b728012;
+ --purple:#9ca3af;--purple-dim:#9ca3af15;
+ --text:#111827;--text2:#4b5563;--text3:#9ca3af;
+ --mono:'IBM Plex Mono',monospace;--display:'Syne',sans-serif;
+ --r:10px;
+}

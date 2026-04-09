@@ -1,76 +1,54 @@
 # NexaBank-ARIA 🏦
 
-An AI-powered banking platform that provides smart financial insights and seamless banking experience.
+A browser-first NexaBank voice assistant demo. The app has been refactored from a monolithic `index.html` into a clean multi-file layout while preserving direct browser usage and hands-free interaction.
 
-## Features
+## What this repo contains
 
-### 🤖 AI Financial Assistant
-- Intelligent spending analysis
-- Personalized financial predictions
-- Smart savings recommendations
-- Real-time financial insights
+- `index.html` — main application shell and UI markup
+- `assets/css/variables.css` — theme values, color tokens, spacing
+- `assets/css/base.css` — resets, typography, and body styles
+- `assets/css/layout.css` — shell grid layout and responsive panels
+- `assets/css/components.css` — UI cards, buttons, badges, and tables
+- `assets/css/states.css` — animations, transitions, and state styles
+- `assets/js/helpers.js` — utility functions
+- `assets/js/profile.js` — customer profile helpers
+- `assets/js/state.js` — shared application state
+- `assets/js/dom.js` — DOM references and helpers
+- `assets/js/log.js` — logging, toast, and export support
+- `assets/js/ledger.js` — transaction ledger and balance updates
+- `assets/js/waveform.js` — audio waveform rendering
+- `assets/js/voice-ui.js` — status indicators and microphone controls
+- `assets/js/nlp.js` — local natural language parsing
+- `assets/js/intents.js` — intent responses and action logic
+- `assets/js/process-input.js` — command processing and follow-up prompts
+- `assets/js/mic.js` — microphone initialization and speech recognition
+- `assets/js/app-init.js` — bootstrapping and startup behavior
+- `assets/js/globals.js` — helper safety wrappers for inline event handlers
 
-### 💰 Account Management
-- Real-time balance tracking
-- Transaction history
-- Multiple account support
-- Instant money transfers
+## Run instructions
 
-### 📊 Smart Analytics
-- Spending pattern analysis
-- Budget forecasting
-- Investment tracking
-- Goal progress monitoring
+1. Open `index.html` directly in a browser.
+2. Allow microphone access when prompted.
+3. Speak naturally or type a command in the input field.
 
-### 🔒 Security Features
-- Bank-grade encryption
-- Biometric authentication
-- Two-factor authentication
-- Secure transaction processing
+> Best experience: Chrome / Edge with microphone permissions enabled.
 
-## Technology Stack
+## Supported interactions
 
-- **Frontend**: HTML5, CSS3, JavaScript
-- **Design**: Responsive, Mobile-First
-- **Features**: AI-Powered Insights, Real-time Updates
-- **Security**: End-to-end encryption
+- Transfer money: "Send 2500 to Priya from savings"
+- Pay bills: "Pay electricity bill 1200"
+- Check balance: "What is my current balance?"
+- Block card: "Block my debit card"
+- Request statements: "Show my last month statement"
+- Profile info: "What is my email address?"
 
-## Getting Started
+## Notes
 
-1. Clone the repository
-2. Open `index.html` in your browser
-3. Explore the AI-powered banking dashboard
-
-## Key Highlights
-
-✅ Modern and intuitive interface
-✅ AI-driven financial insights
-✅ Real-time transaction tracking
-✅ Secure and encrypted
-✅ Mobile-responsive design
-✅ Personalized financial advice
-
-## Screenshots
-
-The platform includes:
-- Dashboard with account balance
-- AI insights panel
-- Transaction history
-- Feature cards for quick actions
-
-## Future Enhancements
-
-- [ ] Machine learning-based fraud detection
-- [ ] Voice-activated banking
-- [ ] Cryptocurrency integration
-- [ ] Advanced investment tools
-- [ ] Multi-language support
-- [ ] Dark mode
+- This is a pure client-side demo with no build tools.
+- The experience uses the Web Speech API and Web Audio API.
+- Local storage is used for microphone permission state.
+- No backend API is required.
 
 ## License
 
-MIT License - Feel free to use this project for learning and development.
-
----
-
-**NexaBank-ARIA** - Banking reimagined with AI 🚀
+MIT License
