@@ -4,12 +4,14 @@ function hideMicPermissionPrompt() {
 
   if (modal) {
     modal.hidden = true;
+    modal.style.display = 'none';
     modal.classList.remove('is-open', 'active', 'visible');
     modal.setAttribute('aria-hidden', 'true');
   }
 
   if (screen) {
     screen.hidden = true;
+    screen.style.display = 'none';
     screen.classList.remove('is-open', 'active', 'visible');
     screen.setAttribute('aria-hidden', 'true');
   }
@@ -21,12 +23,14 @@ function showMicPermissionPrompt() {
 
   if (modal) {
     modal.hidden = false;
+    modal.style.display = '';
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
   }
 
   if (screen) {
     screen.hidden = false;
+    screen.style.display = '';
     screen.classList.add('is-open');
     screen.setAttribute('aria-hidden', 'false');
   }
