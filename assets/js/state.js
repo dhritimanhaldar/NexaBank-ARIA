@@ -4,8 +4,8 @@ const S = {
   isSpeaking:   false,
   isMuted:      false,
   micReady:     false,
-  permissionAsked: localStorage.getItem('ariaMicPermissionAsked') === '1',
-  permissionGranted: localStorage.getItem('ariaMicPermissionGranted') === '1',
+  permissionAsked: (window.safeStorageGet ? safeStorageGet('ariaMicPermissionAsked', '0') : '0') === '1',
+  permissionGranted: (window.safeStorageGet ? safeStorageGet('ariaMicPermissionGranted', '0') : '0') === '1',
 
   sessionId: 'SES-'+Math.random().toString(36).slice(2,7).toUpperCase(),
   accounts:  { savings:124500, current:58200 },

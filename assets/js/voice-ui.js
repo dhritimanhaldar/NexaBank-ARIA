@@ -10,19 +10,21 @@ function showPermissionOverlay(){
 
 function markMicPermissionAsked(){
   S.permissionAsked = true;
-  localStorage.setItem('ariaMicPermissionAsked', '1');
+  if(window.safeStorageSet) safeStorageSet('ariaMicPermissionAsked', '1');
 }
 
 function markMicPermissionGranted(){
   S.permissionAsked = true;
   S.permissionGranted = true;
-  localStorage.setItem('ariaMicPermissionAsked', '1');
-  localStorage.setItem('ariaMicPermissionGranted', '1');
+  if(window.safeStorageSet) safeStorageSet('ariaMicPermissionAsked', '1');
+  if(window.safeStorageSet) safeStorageSet('ariaMicPermissionGranted', '1');
 }
 
 function markMicPermissionDenied(){
   S.permissionAsked = true;
-  localStorage.setItem('ariaMicPermissionAsked', '1');
+  S.permissionGranted = false;
+  if(window.safeStorageSet) safeStorageSet('ariaMicPermissionAsked', '1');
+  if(window.safeStorageRemove) safeStorageRemove('ariaMicPermissionGranted');
 }
 
 function syncPermissionOverlayOnBoot(){
