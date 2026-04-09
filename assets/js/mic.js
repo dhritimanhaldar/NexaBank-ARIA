@@ -1,4 +1,5 @@
 async function initMic(){
+  if(S.role === 'supervisor') return;
   if(S._stream && S.micReady){
     hidePermissionOverlay();
     updateMicBtn();
@@ -64,6 +65,7 @@ async function initMic(){
 }
 
 function scheduleAutoListen(delay=1000){
+  if(S.role === 'supervisor') return;
   if(S.autoListenTimer) clearTimeout(S.autoListenTimer);
   S.autoListenTimer=setTimeout(()=>{
     if(!S.isListening&&!S.isThinking&&!S.isSpeaking&&!S.isMuted&&S.micReady){
@@ -74,6 +76,7 @@ function scheduleAutoListen(delay=1000){
 }
 
 function startListening(){
+  if(S.role === 'supervisor') return;
   if(!S.micReady||S.isMuted||S.isThinking||S.isSpeaking||S.isListening) return;
 
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -231,6 +234,10 @@ function clearVadBar(){
 }
 
 function toggleMute(){
+  if(S.role === 'supervisor'){
+    showToast('INFO','Supervisor mode is view-only.');
+    return;
+  }
   if(!S.micReady){
     if(S.permissionGranted){
       initMic();
@@ -261,6 +268,10 @@ function toggleMute(){
 }
 
 function sendManual(){
+  if(S.role === 'supervisor'){
+    showToast('INFO','Supervisor mode is view-only.');
+    return;
+  }
   const i=DOM.manualInput;
   const t=i.value.trim(); if(!t) return;
   i.value='';
@@ -269,11 +280,16 @@ function sendManual(){
 }
 
 function runHint(t){
+  if(S.role === 'supervisor'){
+    showToast('INFO','Supervisor mode is view-only.');
+    return;
+  }
   cancelSpeech();
   processInput(t);
 }
 
 function speak(text){
+  if(S.role === 'supervisor') return;
   if(!window.speechSynthesis){
     scheduleAutoListen();
     return;

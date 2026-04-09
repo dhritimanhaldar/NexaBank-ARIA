@@ -186,6 +186,7 @@ function speakPendingResponse(rawText, spoken, detailText){
   S.isThinking = true;
   DOM.transcriptText.textContent = rawText;
   addLog('user','You',rawText);
+  if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
   showThinking(true);
   setStatus('thinking','THINKING');
   setOrbSpin(false);
@@ -194,6 +195,7 @@ function speakPendingResponse(rawText, spoken, detailText){
     S.isThinking = false;
     addLog('aria','ARIA',spoken);
     if(detailText) addLog('system','SYSTEM',detailText);
+    if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
     speak(spoken);
   }, 350);
 }
@@ -225,6 +227,7 @@ function processInput(text){
       S.pendingTransaction = null;
       S.pendingTask = null;
       addLog('system','SYSTEM',`Completing pending ${completedIntent === 'pay_bill' ? 'bill payment' : 'transfer'}: ${completeText}`);
+      if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
       processInput(completeText);
       return;
     }
@@ -254,6 +257,7 @@ function processInput(text){
   S.isThinking = true;
   DOM.transcriptText.textContent = rawText;
   addLog('user','You',rawText);
+  if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
   showThinking(true);
   setStatus('thinking','THINKING');
   setOrbSpin(false);
@@ -263,6 +267,7 @@ function processInput(text){
     showThinking(false);
     S.isThinking = false;
     addLog('aria','ARIA',r.spoken);
+    if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
     speak(r.spoken);
 
     if(r.action){

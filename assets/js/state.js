@@ -32,8 +32,19 @@ const S = {
   pendingFinal:    '',     // accumulated final transcript during a listen session
   vadSpeechDetected: false,
   vadSilenceStart:   null,
-    pendingTransaction: null,  // stores incomplete transaction details
+  pendingTransaction: null,  // stores incomplete transaction details
   pendingTask: null,
+  role: null,
+  sessionChannelId: 'global-live-session',
+  customerLock: null,
+  isSupervisorView: false,
+  heartbeatTimer: null,
+  heartbeatIntervalMs: 5000,
+  heartbeatExpiryMs: 15000,
+  remoteUnsubscribe: null,
+  presenceUnsubscribe: null,
+  suppressLocalSideEffects: false,
+  firebaseAvailable: false
 };
 
 document.getElementById('sessionId').textContent = S.sessionId;

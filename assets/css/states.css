@@ -62,3 +62,12 @@ table.ledger tr.new-tx td{animation:txfl 1.8s ease}
 .acct-card.updated{animation:aflash 1.5s ease}
 @keyframes aflash{0%,100%{border-color:var(--border)}50%{border-color:var(--green);background:var(--green-dim)}}
 .toast.show{transform:translateY(0);opacity:1}
+.supervisor-mode .mic-wrap,
+.supervisor-mode .wave-wrap,
+.supervisor-mode .manual-wrap,
+.supervisor-mode .hints{
+  display:none !important;
+}
+.supervisor-mode #permOverlay{
+  display:none !important;
+}

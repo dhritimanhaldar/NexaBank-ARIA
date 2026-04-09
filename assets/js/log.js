@@ -11,7 +11,7 @@ function addLog(type,who,msg,params){
 
 function showThinking(on){ DOM.thinkingRow.className='thinking-row'+(on?' show':''); }
 
-function clearLog(){ DOM.logStream.innerHTML=''; S.logEntries=[]; addLog('system','SYSTEM','Log cleared.'); }
+function clearLog(){ DOM.logStream.innerHTML=''; S.logEntries=[]; addLog('system','SYSTEM','Log cleared.'); if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot(); }
 
 function exportLog(){
   const txt=S.logEntries.map(e=>`[${e.time}] [${e.who}] ${e.msg}${e.params?'\n'+e.params:''}`).join('\n\n');

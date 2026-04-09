@@ -9,6 +9,7 @@ function addTx(action,detail,amount,amtClass,status){
   const row=document.createElement('tr'); row.className='new-tx';
   row.innerHTML=`<td style="color:var(--text3)">${S.txSeq}</td><td style="color:var(--text3);white-space:nowrap">${now}</td><td><span class="badge ${action}">${Helpers.actionLabel(action)}</span></td><td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${Helpers.esc(detail||'')}">${Helpers.esc(detail||'—')}</td><td><span class="amt ${amtClass||'neutral'}">${amount||'—'}</span></td><td><span class="sbadge ${status}">${status}</span></td>`;
   DOM.ledgerBody.prepend(row);
+  if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
 }
 
 function updateBal(key,delta){
@@ -20,6 +21,7 @@ function updateBal(key,delta){
   chgEl.className='acct-chg '+(delta<0?'debit':'credit');
   cardEl.classList.add('updated');
   setTimeout(()=>{ cardEl.classList.remove('updated'); chgEl.textContent=''; },2500);
+  if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
 }
 
 function getRecentLedgerRows(limit=5){
