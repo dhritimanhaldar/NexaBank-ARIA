@@ -48,6 +48,7 @@ function enterAsSupervisor(){
   try{
     S.role = 'supervisor';
     S.isSupervisorView = true;
+    document.body.classList.add('supervisor-mode');
     const roleGate = document.getElementById('roleGate');
     if(roleGate) roleGate.style.display = 'none';
     updateRoleBadge();

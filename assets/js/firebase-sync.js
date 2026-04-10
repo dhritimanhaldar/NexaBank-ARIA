@@ -81,13 +81,23 @@ function subscribeToRemoteSession(){
     S.remoteUnsubscribe = docRef.onSnapshot((doc) => {
       if(doc.exists && !S.suppressLocalSideEffects){
         const data = doc.data();
-        // hydrate remote state into local for supervisor view
         if(data.logEntries) S.logEntries = data.logEntries;
-        if(data.txSeq !== undefined) S.txSeq = data.txSeq;
-        if(data.totalDebit !== undefined) S.totalDebit = data.totalDebit;
-        if(data.accounts) S.accounts = data.accounts;
-        if(data.statusLabel) DOM.statusLabel.textContent = data.statusLabel;
-        if(typeof drawFlat === 'function') drawFlat();
+        if(data.txSeq !== undefined){
+          S.txSeq = data.txSeq;
+          if(DOM.ledgerCount) DOM.ledgerCount.textContent = S.txSeq + ' action' + (S.txSeq !== 1 ? 's' : '');
+          if(DOM.totalActions) DOM.totalActions.textContent = S.txSeq;
+          if(DOM.txnCount) DOM.txnCount.textContent = S.txSeq;
+        }
+        if(data.totalDebit !== undefined){
+          S.totalDebit = data.totalDebit;
+          if(DOM.totalDebit) DOM.totalDebit.textContent = '₹ ' + S.totalDebit.toLocaleString('en-IN');
+        }
+        if(data.accounts){
+          S.accounts = data.accounts;
+          if(DOM.savingsBal) DOM.savingsBal.textContent = '₹ ' + S.accounts.savings.toLocaleString('en-IN', {minimumFractionDigits:2});
+          if(DOM.currentBal) DOM.currentBal.textContent = '₹ ' + S.accounts.current.toLocaleString('en-IN', {minimumFractionDigits:2});
+        }
+        if(data.statusLabel && DOM.statusLabel) DOM.statusLabel.textContent = data.statusLabel;
         if(typeof renderLog === 'function') renderLog();
       }
     }, (err) => {

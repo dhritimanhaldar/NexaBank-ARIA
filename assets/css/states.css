@@ -71,3 +71,13 @@ table.ledger tr.new-tx td{animation:txfl 1.8s ease}
 .supervisor-mode #permOverlay{
   display:none !important;
 }
+/* ── Supervisor mode: hide agent console, keep only Linked Accounts ── */
+body.supervisor-mode .agent-col > .col-head { display: none !important; }
+body.supervisor-mode .agent-col .aria-wrap   { display: none !important; }
+body.supervisor-mode .agent-col .wave-wrap   { display: none !important; }
+body.supervisor-mode .agent-col .vad-bar-wrap{ display: none !important; }
+body.supervisor-mode .agent-col .mic-wrap    { display: none !important; }
+body.supervisor-mode .agent-col .tbox        { display: none !important; }
+body.supervisor-mode .agent-col .manual-wrap { display: none !important; }
+body.supervisor-mode .agent-col .hints       { display: none !important; }
+body.supervisor-mode .agent-col .accounts    { padding-top: 16px; }

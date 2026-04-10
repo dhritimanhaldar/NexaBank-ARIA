@@ -18,7 +18,22 @@ function exportLog(){
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'})); a.download=`nexabank-log-${S.sessionId}.txt`; a.click();
 }
 
+function renderLog(){
+  const el = DOM.logStream;
+  if(!el) return;
+  el.innerHTML = '';
+  const icons = {user:'👤',aria:'🤖',action:'⚡',system:'⚙',error:'✕'};
+  S.logEntries.forEach(function(e){
+    const div = document.createElement('div');
+    div.className = 'entry ' + e.type;
+    div.innerHTML = '<div class="eicon ' + e.type + '">' + (icons[e.type]||'•') + '</div><div class="ebody"><div class="emeta"><span class="ewho ' + e.type + '">' + e.who + '</span><span class="etime">' + e.time + '</span></div><div class="emsg">' + Helpers.esc(e.msg) + '</div>' + (e.params ? '<div class="eparams">' + Helpers.esc(e.params) + '</div>' : '') + '</div>';
+    el.appendChild(div);
+  });
+  el.scrollTop = el.scrollHeight;
+}
+
 window.addLog = addLog;
 window.clearLog = clearLog;
 window.exportLog = exportLog;
 window.showThinking = showThinking;
+window.renderLog = renderLog;
