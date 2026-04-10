@@ -90,7 +90,6 @@ async function initMic(){
     showToast('OK','Microphone enabled.');
 
     speak("Hello! I'm ARIA, your NexaBank AI assistant. I can transfer money, pay bills, check balances, block cards, or send statements. How can I help you today?");
-    scheduleAutoListen(500);
   }catch(err){
     const reason = err?.name || err?.message || 'Permission denied';
     addLog('error','ERROR','Microphone init failed: ' + reason);
@@ -119,6 +118,7 @@ function scheduleAutoListen(delay=1000){
 function startListening(){
   if(S.role === 'supervisor') return;
   if(!S.micReady||S.isMuted||S.isThinking||S.isSpeaking||appState.recognitionActive) return;
+  S.pendingFinal = '';
 
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ showToast('ERR','Speech API not supported. Use Chrome.'); return; }

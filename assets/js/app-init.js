@@ -3,10 +3,14 @@ function handleRoleSelection(role) {
   setCurrentRole(role);
   const roleGate = document.getElementById('roleGate');
   if (roleGate) roleGate.style.display = 'none';
+  if (role === 'supervisor') {
+    if (typeof enterAsSupervisor === 'function') enterAsSupervisor();
+    return;
+  }
   showMicPermissionPrompt();
 }
 
-async function handleMicPermissionClick() {
+function handleMicPermissionClick() {
   if (appState.micPermissionInFlight) return;
 
   console.log('[mic] permission button clicked');
@@ -17,39 +21,8 @@ async function handleMicPermissionClick() {
     return;
   }
 
-  setMicPermissionInFlight(true);
-  setMicPermissionPending(true);
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
-
-    setMicPermissionGranted(true);
-    localStorage.setItem('micPermissionGranted', 'true');
-    console.log('[mic] permission granted');
-
-    closeMicPermissionUi();
-
-    if (typeof updateMicStatus === 'function') {
-      updateMicStatus('Microphone access granted.');
-    }
-
-    continueAfterMicPermission(role);
-  } catch (err) {
-    console.warn('[mic] permission denied', err);
-    setMicPermissionGranted(false);
-    localStorage.setItem('micPermissionGranted', 'false');
-
-    if (typeof updateMicStatus === 'function') {
-      updateMicStatus('Microphone access blocked.');
-    }
-  } finally {
-    setMicPermissionInFlight(false);
-    setMicPermissionPending(false);
-  }
+  closeMicPermissionUi();
+  continueAfterMicPermission(role);
 }
 
 function closeMicPermissionUi() {
@@ -85,8 +58,8 @@ function startSupervisorFlow() {
 }
 
 (function(){
-  if(typeof syncPermissionOverlayOnBoot === 'function'){
-    syncPermissionOverlayOnBoot();
+  if(typeof hideMicPermissionPrompt === 'function'){
+    hideMicPermissionPrompt();
   }
 
   if(typeof addLog === 'function' && window.S){
