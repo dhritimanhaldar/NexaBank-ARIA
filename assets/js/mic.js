@@ -187,10 +187,8 @@ function startListening(){
     }
   };
 
-  rec.onspeechend = () => {
-    console.log('[mic] speech end detected');
-    stopSession('speech-end');
-  };
+  // onspeechend removed: it was clearing the silence timeout before processInput could fire.
+  // The silence timeout (2000ms) now has exclusive responsibility for triggering processInput.
 
   rec.onerror=(e)=>{
     console.warn('[mic] recognition error', e?.error || e);
@@ -198,6 +196,9 @@ function startListening(){
     setListening(false);
     if(typeof setListeningUi === 'function'){
       setListeningUi(false,'Microphone idle.');
+    }
+    if(!S.isThinking && !S.isSpeaking && !S.isMuted && S.micReady){
+      scheduleAutoListen(1500);
     }
   };
 
@@ -211,6 +212,11 @@ function startListening(){
       }
     }
     updateMicBtn();
+    // If processInput was never called this session (restartAllowed still true),
+    // schedule a new listen so the mic does not go permanently silent.
+    if(restartAllowed && !S.isThinking && !S.isSpeaking && !S.isMuted && S.micReady){
+      scheduleAutoListen(500);
+    }
   };
 
   try{
@@ -411,6 +417,24 @@ function speak(text){
 
 speechSynthesis.onvoiceschanged=()=>{}; // pre-load voices
 
+function resetSession(){
+  try{ speechSynthesis.cancel(); } catch(e){}
+  stopListening(true);
+  S.isThinking = false;
+  S.isSpeaking = false;
+  S.pendingTask = null;
+  S.pendingTransaction = null;
+  S.pendingFinal = '';
+  clearRecognitionTimers();
+  if(typeof showThinking === 'function') showThinking(false);
+  if(typeof setStatus === 'function') setStatus('live', 'READY');
+  if(typeof updateMicBtn === 'function') updateMicBtn();
+  if(typeof addLog === 'function') addLog('system','SYSTEM','Session reset by user. You can start speaking again.');
+  if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
+  scheduleAutoListen(800);
+}
+
+window.resetSession = resetSession;
 window.initMic = initMic;
 window.scheduleAutoListen = scheduleAutoListen;
 window.startListening = startListening;

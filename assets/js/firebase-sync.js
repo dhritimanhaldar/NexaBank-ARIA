@@ -98,6 +98,10 @@ function subscribeToRemoteSession(){
           if(DOM.currentBal) DOM.currentBal.textContent = '₹ ' + S.accounts.current.toLocaleString('en-IN', {minimumFractionDigits:2});
         }
         if(data.statusLabel && DOM.statusLabel) DOM.statusLabel.textContent = data.statusLabel;
+        if(data.transactions){
+          S.transactions = data.transactions;
+          if(typeof renderLedger === 'function') renderLedger();
+        }
         if(typeof renderLog === 'function') renderLog();
       }
     }, (err) => {
@@ -135,6 +139,7 @@ function publishLiveSnapshot(){
     const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
     const snapshot = {
       logEntries: S.logEntries,
+      transactions: S.transactions,
       txSeq: S.txSeq,
       totalDebit: S.totalDebit,
       accounts: S.accounts,

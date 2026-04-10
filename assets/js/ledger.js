@@ -1,11 +1,12 @@
 function addTx(action,detail,amount,amtClass,status){
   S.txSeq++;
+  const now=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  S.transactions.push({seq:S.txSeq, time:now, action:action||'unknown', detail:detail||'—', amount:amount||'—', amtClass:amtClass||'neutral', status:status||'info'});
   DOM.emptyLedger.style.display='none';
   DOM.ledgerTable.style.display='';
   DOM.ledgerCount.textContent=S.txSeq+' action'+(S.txSeq!==1?'s':'');
   DOM.totalActions.textContent=S.txSeq;
   DOM.txnCount.textContent=S.txSeq;
-  const now=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const row=document.createElement('tr'); row.className='new-tx';
   row.innerHTML=`<td style="color:var(--text3)">${S.txSeq}</td><td style="color:var(--text3);white-space:nowrap">${now}</td><td><span class="badge ${action}">${Helpers.actionLabel(action)}</span></td><td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${Helpers.esc(detail||'')}">${Helpers.esc(detail||'—')}</td><td><span class="amt ${amtClass||'neutral'}">${amount||'—'}</span></td><td><span class="sbadge ${status}">${status}</span></td>`;
   DOM.ledgerBody.prepend(row);
@@ -60,6 +61,27 @@ function buildRecentTransactionSpeech(rows){
   return `I found your recent transactions. The latest was ${first.action} at ${first.time}, ${first.details}, amount ${first.amount}, status ${first.status}. I can also walk you through more of them if you want.`;
 }
 
+function renderLedger(){
+  if(!DOM.ledgerBody || !S.transactions || !S.transactions.length) return;
+  DOM.emptyLedger.style.display = 'none';
+  DOM.ledgerTable.style.display = '';
+  DOM.ledgerCount.textContent = S.txSeq + ' action' + (S.txSeq !== 1 ? 's' : '');
+  DOM.totalActions.textContent = S.txSeq;
+  DOM.txnCount.textContent = S.txSeq;
+  DOM.ledgerBody.innerHTML = '';
+  [...S.transactions].reverse().forEach(function(t){
+    const row = document.createElement('tr');
+    row.innerHTML = '<td style="color:var(--text3)">' + t.seq + '</td>'
+      + '<td style="color:var(--text3);white-space:nowrap">' + t.time + '</td>'
+      + '<td><span class="badge ' + t.action + '">' + Helpers.actionLabel(t.action) + '</span></td>'
+      + '<td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + Helpers.esc(t.detail) + '">' + Helpers.esc(t.detail) + '</td>'
+      + '<td><span class="amt ' + t.amtClass + '">' + t.amount + '</span></td>'
+      + '<td><span class="sbadge ' + t.status + '">' + t.status + '</span></td>';
+    DOM.ledgerBody.appendChild(row);
+  });
+}
+
+window.renderLedger = renderLedger;
 window.addTx = addTx;
 window.updateBal = updateBal;
 window.getRecentLedgerRows = getRecentLedgerRows;

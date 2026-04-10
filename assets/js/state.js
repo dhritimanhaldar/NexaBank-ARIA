@@ -26,7 +26,7 @@ const S = {
     panMasked: 'ABCDE1234X',
     kycStatus: 'Verified'
   },
-  totalDebit:0, txSeq:0, logEntries:[],
+  totalDebit:0, txSeq:0, logEntries:[], transactions:[],
 
   recognition:   null,
   audioCtx:      null,
