@@ -1,7 +1,9 @@
 let firebaseApp = null;
 let firestoreDb = null;
 let _localBc = null;
+let _publishTimer = null;
 
+// Returns a BroadcastChannel instance for same-device tab sync.
 function getLocalChannel() {
   if (!_localBc && typeof BroadcastChannel !== 'undefined') {
     _localBc = new BroadcastChannel('nexabank_aria_sync');
@@ -9,6 +11,8 @@ function getLocalChannel() {
   return _localBc;
 }
 
+// Shared function that both Firebase and BroadcastChannel paths call
+// when the supervisor tab receives a snapshot.
 function applyRemoteSnapshot(data) {
   if (!data) return;
   if (data.logEntries) S.logEntries = data.logEntries;
@@ -35,6 +39,17 @@ function applyRemoteSnapshot(data) {
   if (typeof renderLog === 'function') renderLog();
 }
 
+// Debounced publisher — batches rapid addLog() calls into one Firestore
+// write every 300 ms so the supervisor sees updates in near real-time
+// without flooding Firestore with one write per character.
+function scheduledPublish() {
+  if (_publishTimer) clearTimeout(_publishTimer);
+  _publishTimer = setTimeout(function() {
+    _publishTimer = null;
+    publishLiveSnapshot();
+  }, 300);
+}
+
 function initFirebaseSync(){
   try{
     if(typeof firebase === 'undefined' || !window.NEXA_FIREBASE_CONFIG){
@@ -44,16 +59,9 @@ function initFirebaseSync(){
     if(firebaseApp) return; // already initialized
     firebaseApp = firebase.initializeApp(window.NEXA_FIREBASE_CONFIG);
     firestoreDb = firebase.firestore();
-    // Mark available immediately so UI badge updates; actual writes
-    // are deferred until the anonymous sign-in promise resolves.
     S.firebaseAvailable = true;
-    // Sign in anonymously so Firestore security rules (auth != null)
-    // are satisfied from both the customer device and supervisor device.
-    firebase.auth().signInAnonymously().then(function(){
-      console.log('[firebase] anonymous auth OK, uid:', firebase.auth().currentUser && firebase.auth().currentUser.uid);
-    }).catch(function(authErr){
-      console.warn('[firebase] anonymous sign-in failed — Firestore writes may be rejected:', authErr.message);
-    });
+    // Immediately verify Firestore is accessible and print result to console.
+    _testFirebaseWrite();
   }catch(err){
     console.warn('Firebase init failed, falling back to local mode:', err);
     S.firebaseAvailable = false;
@@ -120,7 +128,7 @@ function stopSessionHeartbeat(){
 function subscribeToRemoteSession(){
   if(S.role !== 'supervisor') return;
 
-  // BroadcastChannel listener — always active, works without Firebase
+  // ── BroadcastChannel (same device, zero latency) ────────────────
   try {
     const bc = getLocalChannel();
     if (bc) {
@@ -130,22 +138,23 @@ function subscribeToRemoteSession(){
       };
     }
   } catch(bcErr) {
-    console.warn('BroadcastChannel listen setup failed:', bcErr);
+    console.warn('[NexaBank] BroadcastChannel listener failed:', bcErr);
   }
 
-  // Firebase listener — only when available
+  // ── Firestore (cross-device) ─────────────────────────────────────
   if(!S.firebaseAvailable || !firestoreDb) return;
   try{
     const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
-    S.remoteUnsubscribe = docRef.onSnapshot((doc) => {
+    S.remoteUnsubscribe = docRef.onSnapshot(function(doc) {
       if(doc.exists && !S.suppressLocalSideEffects){
         applyRemoteSnapshot(doc.data());
       }
-    }, (err) => {
-      console.warn('Remote session subscribe failed:', err);
+    }, function(err) {
+      console.error('[NexaBank] Firestore onSnapshot failed (' + err.code + '):', err.message,
+        '\nCheck Firestore security rules — see the ❌ message above for instructions.');
     });
   }catch(err){
-    console.warn('Subscribe to remote session failed:', err);
+    console.warn('[NexaBank] subscribeToRemoteSession setup failed:', err);
   }
 }
 
@@ -171,45 +180,41 @@ function syncRoleGateStatus(){
 }
 
 function publishLiveSnapshot(){
-  if(!S.firebaseAvailable || !firestoreDb || S.role !== 'customer') return;
-  try{
-    const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
-    const snapshot = {
-      logEntries: S.logEntries,
-      transactions: S.transactions,
-      txSeq: S.txSeq,
-      totalDebit: S.totalDebit,
-      accounts: S.accounts,
-      role: S.role,
-      sessionId: S.sessionId,
-      statusLabel: DOM.statusLabel ? DOM.statusLabel.textContent : '',
-      updatedAt: Date.now()
-    };
-    docRef.set(snapshot, {merge: true});
-  }catch(err){
-    console.warn('Publish live snapshot failed:', err);
-  }
+  if(S.role !== 'customer') return;
 
-  // Also broadcast locally so supervisor tabs on the same browser sync
-  // without needing Firebase
+  const payload = {
+    logEntries: S.logEntries,
+    transactions: S.transactions,
+    txSeq: S.txSeq,
+    totalDebit: S.totalDebit,
+    accounts: S.accounts,
+    sessionId: S.sessionId,
+    statusLabel: DOM.statusLabel ? DOM.statusLabel.textContent : ''
+  };
+
+  // ── BroadcastChannel (same device, instant) ──────────────────────
   try {
     const bc = getLocalChannel();
     if (bc) {
-      bc.postMessage({
-        type: 'nexabank_snapshot',
-        payload: {
-          logEntries: S.logEntries,
-          transactions: S.transactions,
-          txSeq: S.txSeq,
-          totalDebit: S.totalDebit,
-          accounts: S.accounts,
-          sessionId: S.sessionId,
-          statusLabel: DOM.statusLabel ? DOM.statusLabel.textContent : ''
-        }
-      });
+      bc.postMessage({ type: 'nexabank_snapshot', payload: payload });
     }
   } catch(bcErr) {
-    console.warn('BroadcastChannel post failed:', bcErr);
+    console.warn('[NexaBank] BroadcastChannel post failed:', bcErr);
+  }
+
+  // ── Firestore (cross-device) ──────────────────────────────────────
+  if(!S.firebaseAvailable || !firestoreDb) return;
+  try{
+    const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
+    docRef
+      .set(Object.assign({}, payload, { role: S.role, updatedAt: Date.now() }), { merge: true })
+      .catch(function(err) {
+        // This .catch() is critical — docRef.set() returns a Promise and
+        // Firestore rule rejections are async, invisible to the try/catch above.
+        console.error('[NexaBank] Firestore write failed (' + err.code + '):', err.message);
+      });
+  }catch(err){
+    console.warn('[NexaBank] publishLiveSnapshot sync error:', err);
   }
 }
 
@@ -222,3 +227,4 @@ window.subscribeToRemoteSession = subscribeToRemoteSession;
 window.publishRemoteEvent = publishRemoteEvent;
 window.syncRoleGateStatus = syncRoleGateStatus;
 window.publishLiveSnapshot = publishLiveSnapshot;
+window.scheduledPublish = scheduledPublish;
