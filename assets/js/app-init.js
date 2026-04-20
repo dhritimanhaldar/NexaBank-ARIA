@@ -10,7 +10,7 @@ function handleRoleSelection(role) {
   showMicPermissionPrompt();
 }
 
-function handleMicPermissionClick() {
+async function handleMicPermissionClick() {
   if (appState.micPermissionInFlight) return;
 
   console.log('[mic] permission button clicked');
@@ -22,7 +22,9 @@ function handleMicPermissionClick() {
   }
 
   closeMicPermissionUi();
-  continueAfterMicPermission(role);
+  await Promise.resolve(continueAfterMicPermission(role)).catch((err) => {
+    console.warn('[app-init] post-permission flow failed', err);
+  });
 }
 
 function closeMicPermissionUi() {

@@ -1,11 +1,16 @@
-function bootRoleGate(){
+async function bootRoleGate(){
   try{
     const roleGate = document.getElementById('roleGate');
     const enterCustomerBtn = document.getElementById('enterCustomerBtn');
     const enterSupervisorBtn = document.getElementById('enterSupervisorBtn');
     if(enterCustomerBtn) enterCustomerBtn.onclick = enterAsCustomer;
     if(enterSupervisorBtn) enterSupervisorBtn.onclick = enterAsSupervisor;
-    if(typeof initFirebaseSync === 'function') initFirebaseSync();
+    if(typeof initFirebaseSync === 'function'){
+      const syncReady = await initFirebaseSync().catch(() => false);
+      if (!syncReady) {
+        console.warn('[role-gate] Firebase sync unavailable, continuing in local-only mode');
+      }
+    }
     if(typeof syncRoleGateStatus === 'function') syncRoleGateStatus();
     if(roleGate) roleGate.style.display = 'flex';
     updateRoleBadge();
@@ -14,17 +19,17 @@ function bootRoleGate(){
   }
 }
 
-function enterAsCustomer(){
+async function enterAsCustomer(){
   try{
     const roleGateStatus = document.getElementById('roleGateStatus');
     if(roleGateStatus) roleGateStatus.textContent = 'Joining as customer...';
-    let lockAcquired = true;
+    let lockAcquired = false;
     if(typeof acquireCustomerLock === 'function'){
-      lockAcquired = acquireCustomerLock();
+      lockAcquired = await acquireCustomerLock('customer').catch(() => false);
     }
     if(!lockAcquired){
       if(roleGateStatus) roleGateStatus.textContent = 'A customer session is already active. Open supervisor mode or try again.';
-      return;
+      console.warn('[role-gate] Customer lock not acquired or sync unavailable; continuing locally');
     }
     S.role = 'customer';
     S.isSupervisorView = false;
@@ -38,14 +43,23 @@ function enterAsCustomer(){
     if(micBtn) micBtn.disabled = false;
     if(typeof addLog === 'function') addLog('system','SYSTEM','Entered customer mode. Voice and manual input enabled.');
     if(typeof initMic === 'function') initMic();
-    if(typeof startSessionHeartbeat === 'function') startSessionHeartbeat();
+    if(typeof startSessionHeartbeat === 'function') startSessionHeartbeat(() => ({
+      role: 'customer',
+      mode: 'live'
+    }));
   }catch(err){
     console.warn('enterAsCustomer failed:', err);
   }
 }
 
-function enterAsSupervisor(){
+async function enterAsSupervisor(){
   try{
+    const syncReady = typeof initFirebaseSync === 'function'
+      ? await initFirebaseSync().catch(() => false)
+      : false;
+    if (!syncReady) {
+      console.warn('[role-gate] Firebase sync unavailable, continuing in local-only mode');
+    }
     S.role = 'supervisor';
     S.isSupervisorView = true;
     document.body.classList.add('supervisor-mode');

@@ -2,6 +2,99 @@ let firebaseApp = null;
 let firestoreDb = null;
 let _localBc = null;
 let _publishTimer = null;
+const NEXABANK_SYNC_PREFIX = '[NexaBank]';
+let firebaseSyncAvailable = false;
+let firebaseSyncInitialized = false;
+let firebaseSyncDisabledReason = '';
+let heartbeatIntervalId = null;
+
+function logSyncInfo(message, extra) {
+  if (typeof extra !== 'undefined') {
+    console.log(`${NEXABANK_SYNC_PREFIX} ${message}`, extra);
+  } else {
+    console.log(`${NEXABANK_SYNC_PREFIX} ${message}`);
+  }
+}
+
+function logSyncWarn(message, extra) {
+  if (typeof extra !== 'undefined') {
+    console.warn(`${NEXABANK_SYNC_PREFIX} ${message}`, extra);
+  } else {
+    console.warn(`${NEXABANK_SYNC_PREFIX} ${message}`);
+  }
+}
+
+function disableFirebaseSync(reason, extra) {
+  firebaseSyncAvailable = false;
+  firebaseSyncDisabledReason = reason || 'unknown-reason';
+  if (window.S) S.firebaseAvailable = false;
+
+  if (heartbeatIntervalId) {
+    clearInterval(heartbeatIntervalId);
+    heartbeatIntervalId = null;
+  }
+
+  if (typeof extra !== 'undefined') {
+    console.warn(`${NEXABANK_SYNC_PREFIX} Firebase sync disabled: ${firebaseSyncDisabledReason}`, extra);
+  } else {
+    console.warn(`${NEXABANK_SYNC_PREFIX} Firebase sync disabled: ${firebaseSyncDisabledReason}`);
+  }
+}
+
+function isPermissionError(err) {
+  const code = err?.code || err?.name || '';
+  const message = err?.message || '';
+  return (
+    String(code).includes('permission-denied') ||
+    String(code).includes('PermissionDenied') ||
+    String(message).toLowerCase().includes('insufficient permissions') ||
+    String(message).toLowerCase().includes('permission denied')
+  );
+}
+
+function canUseFirebaseSync() {
+  return firebaseSyncAvailable === true;
+}
+
+function doc(dbRef, ...path) {
+  if (!dbRef || typeof dbRef.collection !== 'function') return null;
+  if (path.length < 2) return null;
+  let ref = dbRef.collection(path[0]).doc(path[1]);
+  for (let i = 2; i < path.length; i += 2) {
+    const collectionName = path[i];
+    const docId = path[i + 1];
+    if (!collectionName) break;
+    ref = ref.collection(collectionName);
+    if (typeof docId !== 'undefined') {
+      ref = ref.doc(docId);
+    }
+  }
+  return ref;
+}
+
+function setDoc(ref, data, options) {
+  if (!ref || typeof ref.set !== 'function') return Promise.reject(new Error('invalid-doc-ref'));
+  return ref.set(data, options);
+}
+
+function updateDoc(ref, data) {
+  if (!ref || typeof ref.update !== 'function') return Promise.reject(new Error('invalid-doc-ref'));
+  return ref.update(data);
+}
+
+function getDoc(ref) {
+  if (!ref || typeof ref.get !== 'function') return Promise.reject(new Error('invalid-doc-ref'));
+  return ref.get();
+}
+
+function runTransaction(dbRef, updateFunction) {
+  if (!dbRef || typeof dbRef.runTransaction !== 'function') return Promise.reject(new Error('invalid-db-ref'));
+  return dbRef.runTransaction(updateFunction);
+}
+
+function serverTimestamp() {
+  return firebase.firestore.FieldValue.serverTimestamp();
+}
 
 // Returns a BroadcastChannel instance for same-device tab sync.
 function getLocalChannel() {
@@ -42,115 +135,164 @@ function applyRemoteSnapshot(data) {
 // Debounced publisher — batches rapid addLog() calls into one Firestore
 // write every 300 ms so the supervisor sees updates in near real-time
 // without flooding Firestore with one write per character.
-function scheduledPublish() {
+function scheduledPublish(payload = {}, delay = 0) {
   if (_publishTimer) clearTimeout(_publishTimer);
   _publishTimer = setTimeout(function() {
     _publishTimer = null;
-    publishLiveSnapshot();
-  }, 300);
+    if (!canUseFirebaseSync() && S.role !== 'customer') return;
+    publishLiveSnapshot(payload);
+  }, delay || 300);
 }
 
 async function _testFirebaseWrite() {
-  if (!window.db || !window.firebaseFns) {
-    console.error('[NexaBank] ❌ Firestore unavailable for write test');
-    return false;
-  }
+  if (!canUseFirebaseSync()) return false;
 
   try {
-    const sessionId = (window.S && window.S.sessionId) || 'test-session';
-    const ref = window.firebaseFns.doc(window.db, 'ariaSessions', sessionId);
+    const testRef = doc(firestoreDb, '_health', 'write-test');
+    await setDoc(testRef, {
+      updatedAt: serverTimestamp(),
+      source: 'nexabank-aria'
+    }, { merge: true });
 
-    await window.firebaseFns.setDoc(
-      ref,
-      {
-        lastWriteTestAt: Date.now(),
-        lastWriteTestISO: new Date().toISOString(),
-        source: (window.S && window.S.role) || 'customer',
-        probe: true
-      },
-      { merge: true }
-    );
-
-    console.log('[NexaBank] ✅ Firestore connection OK — cross-device sync is live.');
+    logSyncInfo('Firestore write test passed');
     return true;
   } catch (err) {
-    console.error('[NexaBank] ❌ Firestore write BLOCKED (' + (err && err.code ? err.code : err) + ')');
-    throw err;
+    console.warn(`${NEXABANK_SYNC_PREFIX} Firestore unavailable for write test`, err);
+
+    if (isPermissionError(err)) {
+      disableFirebaseSync('firestore-permission-denied', err);
+      return false;
+    }
+
+    disableFirebaseSync('firestore-write-test-failed', err);
+    return false;
   }
 }
 
 async function initFirebaseSync(){
+
+  if (firebaseSyncInitialized) return firebaseSyncAvailable;
+  firebaseSyncInitialized = true;
+
   try{
-    if(typeof firebase === 'undefined' || !window.NEXA_FIREBASE_CONFIG){
+    if (typeof firebase === 'undefined' || !window.NEXA_FIREBASE_CONFIG) {
+      disableFirebaseSync('firebase-config-unavailable');
       S.firebaseAvailable = false;
-      return;
+      return false;
     }
-    if(firebaseApp) return; // already initialized
+
+    if (firebaseApp) return firebaseSyncAvailable;
+
     firebaseApp = firebase.initializeApp(window.NEXA_FIREBASE_CONFIG);
-    firestoreDb = firebase.firestore();
-    S.firebaseAvailable = true;
-    // Immediately verify Firestore is accessible and print result to console.
-    await _testFirebaseWrite();
-  }catch(err){
-    console.warn('Firebase init failed, falling back to local mode:', err);
-    S.firebaseAvailable = false;
-  }
-}
 
-function acquireCustomerLock(){
-  if(!S.firebaseAvailable || !firestoreDb) return true; // allow in local mode
-  try{
-    const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
-    const now = Date.now();
-    return firestoreDb.runTransaction(async (transaction) => {
-      const doc = await transaction.get(docRef);
-      if(doc.exists){
-        const data = doc.data();
-        if(data.role === 'customer' && data.sessionId !== S.sessionId && (now - data.updatedAt) < S.heartbeatExpiryMs){
-          return false; // lock held by another session
-        }
-      }
-      transaction.set(docRef, {role: 'customer', sessionId: S.sessionId, updatedAt: now}, {merge: true});
-      return true;
-    });
-  }catch(err){
-    console.warn('Customer lock acquire failed:', err);
-    return true; // allow on error
-  }
-}
-
-function releaseCustomerLock(){
-  if(!S.firebaseAvailable || !firestoreDb) return;
-  try{
-    const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
-    firestoreDb.runTransaction(async (transaction) => {
-      const doc = await transaction.get(docRef);
-      if(doc.exists && doc.data().sessionId === S.sessionId){
-        transaction.update(docRef, {role: null, sessionId: null, updatedAt: Date.now()});
-      }
-    });
-  }catch(err){
-    console.warn('Customer lock release failed:', err);
-  }
-}
-
-function startSessionHeartbeat(){
-  if(!S.firebaseAvailable || !firestoreDb || S.role !== 'customer') return;
-  stopSessionHeartbeat();
-  S.heartbeatTimer = setInterval(() => {
-    try{
-      const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
-      docRef.set({role: 'customer', sessionId: S.sessionId, updatedAt: Date.now()}, {merge: true});
-    }catch(err){
-      console.warn('Heartbeat update failed:', err);
+    if (typeof firebase.firestore !== 'function') {
+      disableFirebaseSync('firestore-lib-unavailable');
+      S.firebaseAvailable = false;
+      return false;
     }
-  }, S.heartbeatIntervalMs);
+
+    firestoreDb = firebase.firestore();
+    if (!firestoreDb) {
+      disableFirebaseSync('firestore-db-unavailable');
+      S.firebaseAvailable = false;
+      return false;
+    }
+
+    S.firebaseAvailable = true;
+    firebaseSyncAvailable = true;
+    logSyncInfo('Firebase sync initialized');
+
+    await _testFirebaseWrite();
+    return firebaseSyncAvailable;
+  }catch(err){
+    disableFirebaseSync('firebase-init-failed', err);
+    S.firebaseAvailable = false;
+    return false;
+  }
 }
 
-function stopSessionHeartbeat(){
-  if(S.heartbeatTimer){
-    clearInterval(S.heartbeatTimer);
-    S.heartbeatTimer = null;
+async function acquireCustomerLock(customerId = 'customer'){
+  if(!canUseFirebaseSync()) return false;
+
+  try{
+    const lockRef = doc(firestoreDb, 'channels', S.sessionChannelId, 'meta', 'state');
+    await runTransaction(firestoreDb, async (transaction) => {
+      const snap = await transaction.get(lockRef);
+      const data = snap.exists ? snap.data() : null;
+      if (data?.locked) {
+        throw new Error('customer-lock-already-held');
+      }
+      transaction.set(lockRef, {
+        locked: true,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    });
+
+    return true;
+  }catch(err){
+    if (isPermissionError(err)) {
+      disableFirebaseSync('acquireCustomerLock-permission-denied', err);
+      return false;
+    }
+
+    if (err?.message === 'customer-lock-already-held') {
+      return false;
+    }
+
+    logSyncWarn('acquireCustomerLock error', err);
+    return false;
+  }
+}
+
+async function releaseCustomerLock(customerId = 'customer'){
+  if(!canUseFirebaseSync()) return false;
+
+  try{
+    const lockRef = doc(firestoreDb, 'channels', S.sessionChannelId, 'meta', 'state');
+    await setDoc(lockRef, {
+      locked: false,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    return true;
+  }catch(err){
+    if (isPermissionError(err)) {
+      disableFirebaseSync('releaseCustomerLock-permission-denied', err);
+      return false;
+    }
+
+    logSyncWarn('releaseCustomerLock error', err);
+    return false;
+  }
+}
+
+function startSessionHeartbeat(buildPayload) {
+  if (!canUseFirebaseSync()) return;
+
+  if (heartbeatIntervalId) {
+    clearInterval(heartbeatIntervalId);
+    heartbeatIntervalId = null;
+  }
+
+  heartbeatIntervalId = setInterval(() => {
+    if (!canUseFirebaseSync()) return;
+
+    try {
+      const payload = typeof buildPayload === 'function' ? buildPayload() : {};
+      publishLiveSnapshot({
+        ...payload,
+        heartbeatAt: Date.now()
+      });
+    } catch (err) {
+      logSyncWarn('heartbeat payload error', err);
+    }
+  }, 5000);
+}
+
+function stopSessionHeartbeat() {
+  if (heartbeatIntervalId) {
+    clearInterval(heartbeatIntervalId);
+    heartbeatIntervalId = null;
   }
 }
 
@@ -188,7 +330,7 @@ function subscribeToRemoteSession(){
 }
 
 function publishRemoteEvent(eventType, eventData){
-  if(!S.firebaseAvailable || !firestoreDb || S.role !== 'customer') return;
+  if(!canUseFirebaseSync() || !firestoreDb || S.role !== 'customer') return;
   try{
     const eventsRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('events');
     eventsRef.add({
@@ -208,10 +350,10 @@ function syncRoleGateStatus(){
   }
 }
 
-function publishLiveSnapshot(){
-  if(S.role !== 'customer') return;
+async function publishLiveSnapshot(payload = {}) {
+  if (S.role !== 'customer') return false;
 
-  const payload = {
+  const fullPayload = Object.assign({}, {
     logEntries: S.logEntries,
     transactions: S.transactions,
     txSeq: S.txSeq,
@@ -219,33 +361,38 @@ function publishLiveSnapshot(){
     accounts: S.accounts,
     sessionId: S.sessionId,
     statusLabel: DOM.statusLabel ? DOM.statusLabel.textContent : ''
-  };
+  }, payload);
 
   // ── BroadcastChannel (same device, instant) ──────────────────────
   try {
     const bc = getLocalChannel();
     if (bc) {
-      bc.postMessage({ type: 'nexabank_snapshot', payload: payload });
+      bc.postMessage({ type: 'nexabank_snapshot', payload: fullPayload });
     }
   } catch(bcErr) {
-    console.warn('[NexaBank] BroadcastChannel post failed:', bcErr);
+    logSyncWarn('BroadcastChannel post failed:', bcErr);
   }
 
-  // ── Firestore (cross-device) ──────────────────────────────────────
-  if(!S.firebaseAvailable || !firestoreDb) return;
-  try{
-    const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
-    return window.firebaseFns.setDoc(
-      docRef,
-      Object.assign({}, payload, { role: S.role, updatedAt: Date.now() }),
-      { merge: true }
-    )
-      .catch(function(err) {
-        console.error('[NexaBank] publishLiveSnapshot failed:', err);
-        throw err;
-      });
-  }catch(err){
-    console.warn('[NexaBank] publishLiveSnapshot sync error:', err);
+  if (!canUseFirebaseSync() || !firestoreDb) return false;
+
+  try {
+    const snapshotRef = doc(firestoreDb, 'channels', S.sessionChannelId, 'meta', 'state');
+    await setDoc(snapshotRef, Object.assign({}, fullPayload, {
+      role: S.role,
+      updatedAt: serverTimestamp()
+    }), { merge: true });
+
+    return true;
+  } catch (err) {
+    logSyncWarn('publishLiveSnapshot sync error:', err);
+
+    if (isPermissionError(err)) {
+      disableFirebaseSync('publishLiveSnapshot-permission-denied', err);
+      return false;
+    }
+
+    disableFirebaseSync('publishLiveSnapshot-failed', err);
+    return false;
   }
 }
 

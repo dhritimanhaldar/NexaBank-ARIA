@@ -89,7 +89,17 @@ function setStatus(type,label){
   DOM.statusLabel.textContent=label;
   const stateMap={live:'● READY',listening:'◉ LISTENING',thinking:'◈ THINKING',speaking:'◎ SPEAKING',muted:'✕ MUTED'};
   DOM.ariaState.textContent=stateMap[type]||'● READY';
-  if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
+  if (S.role === 'customer' && typeof publishLiveSnapshot === 'function') {
+    try {
+      publishLiveSnapshot({
+        status: type,
+        listening: !!(type === 'listening'),
+        updatedFrom: 'voice-ui'
+      });
+    } catch (err) {
+      console.warn('[voice-ui] status sync skipped', err);
+    }
+  }
 }
 
 function setOrbSpin(on){

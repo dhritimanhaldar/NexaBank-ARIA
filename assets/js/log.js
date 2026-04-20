@@ -7,7 +7,17 @@ function addLog(type,who,msg,params){
   div.innerHTML=`<div class="eicon ${type}">${ICONS[type]||'•'}</div><div class="ebody"><div class="emeta"><span class="ewho ${type}">${who}</span><span class="etime">${now}</span></div><div class="emsg">${Helpers.esc(msg)}</div>${params?`<div class="eparams">${Helpers.esc(params)}</div>`:''}</div>`;
   el.appendChild(div); el.scrollTop=el.scrollHeight;
   S.logEntries.push({time:now,type,who,msg,params});
-  if(S.role === 'customer' && typeof scheduledPublish === 'function') scheduledPublish();
+  if(S.role === 'customer' && typeof scheduledPublish === 'function') {
+    try {
+      scheduledPublish({
+        lastLogAt: Date.now(),
+        source: 'log',
+        message: String(msg || '')
+      }, 0);
+    } catch (err) {
+      console.warn('[log] scheduled publish skipped', err);
+    }
+  }
 }
 
 function showThinking(on){ DOM.thinkingRow.className='thinking-row'+(on?' show':''); }
