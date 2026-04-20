@@ -1,6 +1,7 @@
 const SILENCE_TIMEOUT_MS = 2000;
 const MAX_LISTEN_MS = 10000;
 const MIN_TRANSCRIPT_LENGTH = 2;
+const SPEAK_COOLDOWN_MS = 1500; // ms to ignore mic input after AI finishes speaking
 
 function hasMeaningfulTranscript(text) {
   return typeof text === 'string' && text.trim().replace(/\s+/g, ' ').length >= MIN_TRANSCRIPT_LENGTH;
@@ -118,6 +119,7 @@ function scheduleAutoListen(delay=1000){
 function startListening(){
   if(S.role === 'supervisor') return;
   if(!S.micReady||S.isMuted||S.isThinking||S.isSpeaking||appState.recognitionActive) return;
+  if(S.speakEndedAt && (Date.now() - S.speakEndedAt) < SPEAK_COOLDOWN_MS) return;
   S.pendingFinal = '';
 
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -148,6 +150,10 @@ function startListening(){
   rec.onresult=(e)=>{
     if(S.isSpeaking){
       cancelSpeech();
+      return; // discard anything captured while AI is still speaking
+    }
+    if(S.speakEndedAt && (Date.now() - S.speakEndedAt) < SPEAK_COOLDOWN_MS){
+      return; // discard mic bleed-through captured right after AI finished speaking
     }
 
     let transcript='';
@@ -373,6 +379,7 @@ function speak(text){
 
   u.onend=()=>{
     S.isSpeaking=false;
+    S.speakEndedAt=Date.now();
     DOM.ring1.className='orb-ring';
     DOM.ring2.className='orb-ring2';
     DOM.orbFace.textContent='🤖';
@@ -385,6 +392,7 @@ function speak(text){
   u.onerror=(e)=>{
     if(e.error==='interrupted') return; // user barged in — OK
     S.isSpeaking=false;
+    S.speakEndedAt=Date.now();
     DOM.ring1.className='orb-ring';
     DOM.ring2.className='orb-ring2';
     DOM.orbFace.textContent='🤖';
@@ -398,6 +406,7 @@ function speak(text){
   const fallback=setTimeout(()=>{
     if(S.isSpeaking){
       S.isSpeaking=false;
+      S.speakEndedAt=Date.now();
       DOM.ring1.className='orb-ring';
       DOM.ring2.className='orb-ring2';
       DOM.orbFace.textContent='🤖';

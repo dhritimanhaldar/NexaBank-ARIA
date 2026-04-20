@@ -1,5 +1,39 @@
 let firebaseApp = null;
 let firestoreDb = null;
+let _localBc = null;
+
+function getLocalChannel() {
+  if (!_localBc && typeof BroadcastChannel !== 'undefined') {
+    _localBc = new BroadcastChannel('nexabank_aria_sync');
+  }
+  return _localBc;
+}
+
+function applyRemoteSnapshot(data) {
+  if (!data) return;
+  if (data.logEntries) S.logEntries = data.logEntries;
+  if (data.txSeq !== undefined) {
+    S.txSeq = data.txSeq;
+    if (DOM.ledgerCount) DOM.ledgerCount.textContent = S.txSeq + ' action' + (S.txSeq !== 1 ? 's' : '');
+    if (DOM.totalActions) DOM.totalActions.textContent = S.txSeq;
+    if (DOM.txnCount) DOM.txnCount.textContent = S.txSeq;
+  }
+  if (data.totalDebit !== undefined) {
+    S.totalDebit = data.totalDebit;
+    if (DOM.totalDebit) DOM.totalDebit.textContent = '₹ ' + S.totalDebit.toLocaleString('en-IN');
+  }
+  if (data.accounts) {
+    S.accounts = data.accounts;
+    if (DOM.savingsBal) DOM.savingsBal.textContent = '₹ ' + S.accounts.savings.toLocaleString('en-IN', {minimumFractionDigits:2});
+    if (DOM.currentBal) DOM.currentBal.textContent = '₹ ' + S.accounts.current.toLocaleString('en-IN', {minimumFractionDigits:2});
+  }
+  if (data.statusLabel && DOM.statusLabel) DOM.statusLabel.textContent = data.statusLabel;
+  if (data.transactions) {
+    S.transactions = data.transactions;
+    if (typeof renderLedger === 'function') renderLedger();
+  }
+  if (typeof renderLog === 'function') renderLog();
+}
 
 function initFirebaseSync(){
   try{
@@ -75,34 +109,28 @@ function stopSessionHeartbeat(){
 }
 
 function subscribeToRemoteSession(){
-  if(!S.firebaseAvailable || !firestoreDb || S.role !== 'supervisor') return;
+  if(S.role !== 'supervisor') return;
+
+  // BroadcastChannel listener — always active for same-browser local tab sync
+  try {
+    const bc = getLocalChannel();
+    if (bc) {
+      bc.onmessage = function(event) {
+        if (!event.data || event.data.type !== 'snapshot') return;
+        if (!S.suppressLocalSideEffects) applyRemoteSnapshot(event.data.data);
+      };
+    }
+  } catch(bcErr) {
+    console.warn('BroadcastChannel listen setup failed:', bcErr);
+  }
+
+  // Firebase listener — only when available
+  if(!S.firebaseAvailable || !firestoreDb) return;
   try{
     const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
     S.remoteUnsubscribe = docRef.onSnapshot((doc) => {
       if(doc.exists && !S.suppressLocalSideEffects){
-        const data = doc.data();
-        if(data.logEntries) S.logEntries = data.logEntries;
-        if(data.txSeq !== undefined){
-          S.txSeq = data.txSeq;
-          if(DOM.ledgerCount) DOM.ledgerCount.textContent = S.txSeq + ' action' + (S.txSeq !== 1 ? 's' : '');
-          if(DOM.totalActions) DOM.totalActions.textContent = S.txSeq;
-          if(DOM.txnCount) DOM.txnCount.textContent = S.txSeq;
-        }
-        if(data.totalDebit !== undefined){
-          S.totalDebit = data.totalDebit;
-          if(DOM.totalDebit) DOM.totalDebit.textContent = '₹ ' + S.totalDebit.toLocaleString('en-IN');
-        }
-        if(data.accounts){
-          S.accounts = data.accounts;
-          if(DOM.savingsBal) DOM.savingsBal.textContent = '₹ ' + S.accounts.savings.toLocaleString('en-IN', {minimumFractionDigits:2});
-          if(DOM.currentBal) DOM.currentBal.textContent = '₹ ' + S.accounts.current.toLocaleString('en-IN', {minimumFractionDigits:2});
-        }
-        if(data.statusLabel && DOM.statusLabel) DOM.statusLabel.textContent = data.statusLabel;
-        if(data.transactions){
-          S.transactions = data.transactions;
-          if(typeof renderLedger === 'function') renderLedger();
-        }
-        if(typeof renderLog === 'function') renderLog();
+        applyRemoteSnapshot(doc.data());
       }
     }, (err) => {
       console.warn('Remote session subscribe failed:', err);
@@ -151,6 +179,27 @@ function publishLiveSnapshot(){
     docRef.set(snapshot, {merge: true});
   }catch(err){
     console.warn('Publish live snapshot failed:', err);
+  }
+
+  // Also broadcast locally for same-browser tab sync (works without Firebase)
+  try {
+    const bc = getLocalChannel();
+    if (bc) {
+      bc.postMessage({
+        type: 'snapshot',
+        data: {
+          logEntries: S.logEntries,
+          transactions: S.transactions,
+          txSeq: S.txSeq,
+          totalDebit: S.totalDebit,
+          accounts: S.accounts,
+          sessionId: S.sessionId,
+          statusLabel: DOM.statusLabel ? DOM.statusLabel.textContent : ''
+        }
+      });
+    }
+  } catch(bcErr) {
+    console.warn('BroadcastChannel post failed:', bcErr);
   }
 }
 
