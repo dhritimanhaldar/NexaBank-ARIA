@@ -50,7 +50,36 @@ function scheduledPublish() {
   }, 300);
 }
 
-function initFirebaseSync(){
+async function _testFirebaseWrite() {
+  if (!window.db || !window.firebaseFns) {
+    console.error('[NexaBank] ❌ Firestore unavailable for write test');
+    return false;
+  }
+
+  try {
+    const sessionId = (window.S && window.S.sessionId) || 'test-session';
+    const ref = window.firebaseFns.doc(window.db, 'ariaSessions', sessionId);
+
+    await window.firebaseFns.setDoc(
+      ref,
+      {
+        lastWriteTestAt: Date.now(),
+        lastWriteTestISO: new Date().toISOString(),
+        source: (window.S && window.S.role) || 'customer',
+        probe: true
+      },
+      { merge: true }
+    );
+
+    console.log('[NexaBank] ✅ Firestore connection OK — cross-device sync is live.');
+    return true;
+  } catch (err) {
+    console.error('[NexaBank] ❌ Firestore write BLOCKED (' + (err && err.code ? err.code : err) + ')');
+    throw err;
+  }
+}
+
+async function initFirebaseSync(){
   try{
     if(typeof firebase === 'undefined' || !window.NEXA_FIREBASE_CONFIG){
       S.firebaseAvailable = false;
@@ -61,7 +90,7 @@ function initFirebaseSync(){
     firestoreDb = firebase.firestore();
     S.firebaseAvailable = true;
     // Immediately verify Firestore is accessible and print result to console.
-    _testFirebaseWrite();
+    await _testFirebaseWrite();
   }catch(err){
     console.warn('Firebase init failed, falling back to local mode:', err);
     S.firebaseAvailable = false;
@@ -206,12 +235,14 @@ function publishLiveSnapshot(){
   if(!S.firebaseAvailable || !firestoreDb) return;
   try{
     const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
-    docRef
-      .set(Object.assign({}, payload, { role: S.role, updatedAt: Date.now() }), { merge: true })
+    return window.firebaseFns.setDoc(
+      docRef,
+      Object.assign({}, payload, { role: S.role, updatedAt: Date.now() }),
+      { merge: true }
+    )
       .catch(function(err) {
-        // This .catch() is critical — docRef.set() returns a Promise and
-        // Firestore rule rejections are async, invisible to the try/catch above.
-        console.error('[NexaBank] Firestore write failed (' + err.code + '):', err.message);
+        console.error('[NexaBank] publishLiveSnapshot failed:', err);
+        throw err;
       });
   }catch(err){
     console.warn('[NexaBank] publishLiveSnapshot sync error:', err);
