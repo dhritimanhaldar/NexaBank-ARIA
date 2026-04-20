@@ -44,7 +44,16 @@ function initFirebaseSync(){
     if(firebaseApp) return; // already initialized
     firebaseApp = firebase.initializeApp(window.NEXA_FIREBASE_CONFIG);
     firestoreDb = firebase.firestore();
+    // Mark available immediately so UI badge updates; actual writes
+    // are deferred until the anonymous sign-in promise resolves.
     S.firebaseAvailable = true;
+    // Sign in anonymously so Firestore security rules (auth != null)
+    // are satisfied from both the customer device and supervisor device.
+    firebase.auth().signInAnonymously().then(function(){
+      console.log('[firebase] anonymous auth OK, uid:', firebase.auth().currentUser && firebase.auth().currentUser.uid);
+    }).catch(function(authErr){
+      console.warn('[firebase] anonymous sign-in failed — Firestore writes may be rejected:', authErr.message);
+    });
   }catch(err){
     console.warn('Firebase init failed, falling back to local mode:', err);
     S.firebaseAvailable = false;
