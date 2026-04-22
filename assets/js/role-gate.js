@@ -1,33 +1,3 @@
-const initFirebaseSync = (...args) =>
-  window.NexaBankGlobals?.initFirebaseSync
-    ? window.NexaBankGlobals.initFirebaseSync(...args)
-    : Promise.resolve(false);
-
-const acquireCustomerLock = (...args) =>
-  window.NexaBankGlobals?.acquireCustomerLock
-    ? window.NexaBankGlobals.acquireCustomerLock(...args)
-    : Promise.resolve(false);
-
-const releaseCustomerLock = (...args) =>
-  window.NexaBankGlobals?.releaseCustomerLock
-    ? window.NexaBankGlobals.releaseCustomerLock(...args)
-    : Promise.resolve(false);
-
-const canUseFirebaseSync = (...args) =>
-  window.NexaBankGlobals?.canUseFirebaseSync
-    ? window.NexaBankGlobals.canUseFirebaseSync(...args)
-    : false;
-
-const startSessionHeartbeat = (...args) =>
-  typeof window.startSessionHeartbeat === 'function'
-    ? window.startSessionHeartbeat(...args)
-    : undefined;
-
-const stopSessionHeartbeat = (...args) =>
-  typeof window.stopSessionHeartbeat === 'function'
-    ? window.stopSessionHeartbeat(...args)
-    : undefined;
-
 async function bootRoleGate(){
   try{
     const roleGate = document.getElementById('roleGate');

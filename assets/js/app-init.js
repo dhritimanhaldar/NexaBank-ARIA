@@ -59,7 +59,7 @@ function startSupervisorFlow() {
   }
 }
 
-(function(){
+(async function(){
   if(typeof hideMicPermissionPrompt === 'function'){
     hideMicPermissionPrompt();
   }
