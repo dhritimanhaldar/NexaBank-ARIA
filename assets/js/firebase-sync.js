@@ -413,7 +413,7 @@ async function publishLiveSnapshot(payload = {}) {
       disableFirebaseSync('publishLiveSnapshot-permission-denied', err);
       return false;
     }
-
+  
     disableFirebaseSync('publishLiveSnapshot-failed', err);
     return false;
   }
