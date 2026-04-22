@@ -77,9 +77,13 @@ function startSupervisorFlow() {
     updateMicBtn();
   }
 
-  if(typeof bootRoleGate === 'function'){
-    bootRoleGate();
-  }
+  await Promise.resolve(
+    window.NexaBankGlobals?.bootRoleGate
+      ? window.NexaBankGlobals.bootRoleGate()
+      : false
+  ).catch((err) => {
+    console.warn('[app-init] bootRoleGate failed', err);
+  });
 
   const customerRoleButton = DOM.customerRoleButton || document.getElementById('customerRole');
   const supervisorRoleButton = DOM.supervisorRoleButton || document.getElementById('supervisorRole');

@@ -8,6 +8,11 @@ const acquireCustomerLock = (...args) =>
     ? window.NexaBankGlobals.acquireCustomerLock(...args)
     : Promise.resolve(false);
 
+const releaseCustomerLock = (...args) =>
+  window.NexaBankGlobals?.releaseCustomerLock
+    ? window.NexaBankGlobals.releaseCustomerLock(...args)
+    : Promise.resolve(false);
+
 const canUseFirebaseSync = (...args) =>
   window.NexaBankGlobals?.canUseFirebaseSync
     ? window.NexaBankGlobals.canUseFirebaseSync(...args)
@@ -16,6 +21,11 @@ const canUseFirebaseSync = (...args) =>
 const startSessionHeartbeat = (...args) =>
   typeof window.startSessionHeartbeat === 'function'
     ? window.startSessionHeartbeat(...args)
+    : undefined;
+
+const stopSessionHeartbeat = (...args) =>
+  typeof window.stopSessionHeartbeat === 'function'
+    ? window.stopSessionHeartbeat(...args)
     : undefined;
 
 async function bootRoleGate(){
@@ -43,12 +53,12 @@ async function enterAsCustomer(){
   try{
     const roleGateStatus = document.getElementById('roleGateStatus');
     if(roleGateStatus) roleGateStatus.textContent = 'Joining as customer...';
-    let lockAcquired = false;
     const syncEnabledBeforeLock = typeof canUseFirebaseSync === 'function'
       ? canUseFirebaseSync()
       : true;
-    if(typeof acquireCustomerLock === 'function'){
-      lockAcquired = await acquireCustomerLock('customer').catch(() => false);
+    const lockAcquired = await acquireCustomerLock('customer').catch(() => false);
+    if (syncEnabledBeforeLock && !lockAcquired) {
+      console.warn('[role-gate] Customer lock not acquired; continuing locally');
     }
     if(!lockAcquired){
       if(roleGateStatus) roleGateStatus.textContent = 'A customer session is already active. Open supervisor mode or try again.';
@@ -68,7 +78,7 @@ async function enterAsCustomer(){
     if(micBtn) micBtn.disabled = false;
     if(typeof addLog === 'function') addLog('system','SYSTEM','Entered customer mode. Voice and manual input enabled.');
     if(typeof initMic === 'function') initMic();
-    if(typeof startSessionHeartbeat === 'function') startSessionHeartbeat(() => ({
+    startSessionHeartbeat(() => ({
       role: 'customer',
       mode: 'live'
     }));
@@ -98,6 +108,10 @@ async function enterAsSupervisor(){
     if(micBtn) micBtn.disabled = true;
     if(typeof addLog === 'function') addLog('system','SYSTEM','Entered supervisor mode. View-only access.');
     if(typeof subscribeToRemoteSession === 'function') subscribeToRemoteSession();
+    startSessionHeartbeat(() => ({
+      role: 'supervisor',
+      mode: 'live'
+    }));
   }catch(err){
     console.warn('enterAsSupervisor failed:', err);
   }
@@ -132,4 +146,6 @@ window.setLiveModeBadge = setLiveModeBadge;
 
 if (typeof window !== 'undefined') {
   window.bootRoleGate = bootRoleGate;
+  window.enterAsCustomer = enterAsCustomer;
+  window.enterAsSupervisor = enterAsSupervisor;
 }

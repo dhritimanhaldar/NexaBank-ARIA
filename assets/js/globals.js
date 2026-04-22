@@ -11,6 +11,30 @@ if(typeof initFirebaseSync === 'undefined') console.error('initFirebaseSync not 
 
 window.NexaBankGlobals = window.NexaBankGlobals || {};
 
+window.NexaBankGlobals.bootRoleGate = function (...args) {
+  if (typeof window.bootRoleGate === 'function') {
+    return window.bootRoleGate(...args);
+  }
+  console.warn('bootRoleGate not found on window');
+  return Promise.resolve(false);
+};
+
+window.NexaBankGlobals.enterAsCustomer = function (...args) {
+  if (typeof window.enterAsCustomer === 'function') {
+    return window.enterAsCustomer(...args);
+  }
+  console.warn('enterAsCustomer not found on window');
+  return Promise.resolve(false);
+};
+
+window.NexaBankGlobals.enterAsSupervisor = function (...args) {
+  if (typeof window.enterAsSupervisor === 'function') {
+    return window.enterAsSupervisor(...args);
+  }
+  console.warn('enterAsSupervisor not found on window');
+  return Promise.resolve(false);
+};
+
 window.NexaBankGlobals.initFirebaseSync = function (...args) {
   if (typeof window.initFirebaseSync === 'function') {
     return window.initFirebaseSync(...args);
@@ -19,16 +43,16 @@ window.NexaBankGlobals.initFirebaseSync = function (...args) {
   return Promise.resolve(false);
 };
 
-window.NexaBankGlobals.publishLiveSnapshot = function (...args) {
-  if (typeof window.publishLiveSnapshot === 'function') {
-    return window.publishLiveSnapshot(...args);
+window.NexaBankGlobals.acquireCustomerLock = function (...args) {
+  if (typeof window.acquireCustomerLock === 'function') {
+    return window.acquireCustomerLock(...args);
   }
   return Promise.resolve(false);
 };
 
-window.NexaBankGlobals.acquireCustomerLock = function (...args) {
-  if (typeof window.acquireCustomerLock === 'function') {
-    return window.acquireCustomerLock(...args);
+window.NexaBankGlobals.releaseCustomerLock = function (...args) {
+  if (typeof window.releaseCustomerLock === 'function') {
+    return window.releaseCustomerLock(...args);
   }
   return Promise.resolve(false);
 };
