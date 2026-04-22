@@ -52,7 +52,7 @@ function isPermissionError(err) {
   );
 }
 
-export function canUseFirebaseSync() {
+function canUseFirebaseSync() {
   return firebaseSyncAvailable === true;
 }
 
@@ -419,14 +419,13 @@ async function publishLiveSnapshot(payload = {}) {
   }
 }
 
-window.initFirebaseSync = initFirebaseSync;
-window.acquireCustomerLock = acquireCustomerLock;
-window.releaseCustomerLock = releaseCustomerLock;
-window.startSessionHeartbeat = startSessionHeartbeat;
-window.stopSessionHeartbeat = stopSessionHeartbeat;
-window.subscribeToRemoteSession = subscribeToRemoteSession;
-window.publishRemoteEvent = publishRemoteEvent;
-window.syncRoleGateStatus = syncRoleGateStatus;
-window.publishLiveSnapshot = publishLiveSnapshot;
-window.scheduledPublish = scheduledPublish;
-window.canUseFirebaseSync = canUseFirebaseSync;
+if (typeof window !== 'undefined') {
+  window.initFirebaseSync = initFirebaseSync;
+  window.publishLiveSnapshot = publishLiveSnapshot;
+  window.scheduledPublish = scheduledPublish;
+  window.startSessionHeartbeat = startSessionHeartbeat;
+  window.stopSessionHeartbeat = stopSessionHeartbeat;
+  window.acquireCustomerLock = acquireCustomerLock;
+  window.releaseCustomerLock = releaseCustomerLock;
+  window.canUseFirebaseSync = canUseFirebaseSync;
+}

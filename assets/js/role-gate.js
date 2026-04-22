@@ -1,3 +1,23 @@
+const initFirebaseSync = (...args) =>
+  window.NexaBankGlobals?.initFirebaseSync
+    ? window.NexaBankGlobals.initFirebaseSync(...args)
+    : Promise.resolve(false);
+
+const acquireCustomerLock = (...args) =>
+  window.NexaBankGlobals?.acquireCustomerLock
+    ? window.NexaBankGlobals.acquireCustomerLock(...args)
+    : Promise.resolve(false);
+
+const canUseFirebaseSync = (...args) =>
+  window.NexaBankGlobals?.canUseFirebaseSync
+    ? window.NexaBankGlobals.canUseFirebaseSync(...args)
+    : false;
+
+const startSessionHeartbeat = (...args) =>
+  typeof window.startSessionHeartbeat === 'function'
+    ? window.startSessionHeartbeat(...args)
+    : undefined;
+
 async function bootRoleGate(){
   try{
     const roleGate = document.getElementById('roleGate');
@@ -109,3 +129,7 @@ window.enterAsCustomer = enterAsCustomer;
 window.enterAsSupervisor = enterAsSupervisor;
 window.updateRoleBadge = updateRoleBadge;
 window.setLiveModeBadge = setLiveModeBadge;
+
+if (typeof window !== 'undefined') {
+  window.bootRoleGate = bootRoleGate;
+}
