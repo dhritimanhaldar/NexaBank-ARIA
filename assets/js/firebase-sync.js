@@ -96,6 +96,28 @@ function serverTimestamp() {
   return firebase.firestore.FieldValue.serverTimestamp();
 }
 
+function stripUndefinedDeep(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map(stripUndefinedDeep)
+      .filter((item) => item !== undefined);
+  }
+
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    const entries = Object.entries(value)
+      .map(([key, val]) => [key, stripUndefinedDeep(val)])
+      .filter(([, val]) => val !== undefined);
+
+    return Object.fromEntries(entries);
+  }
+
+  return value === undefined ? undefined : value;
+}
+
+function sanitizeFirestorePayload(payload = {}) {
+  return stripUndefinedDeep(payload) || {};
+}
+
 // Returns a BroadcastChannel instance for same-device tab sync.
 function getLocalChannel() {
   if (!_localBc && typeof BroadcastChannel !== 'undefined') {
@@ -149,10 +171,10 @@ async function _testFirebaseWrite() {
 
   try {
     const testRef = doc(firestoreDb, '_health', 'write-test');
-    await setDoc(testRef, {
+    await setDoc(testRef, sanitizeFirestorePayload({
       updatedAt: serverTimestamp(),
       source: 'nexabank-aria'
-    }, { merge: true });
+    }), { merge: true });
 
     logSyncInfo('Firestore write test passed');
     return true;
@@ -222,10 +244,10 @@ async function acquireCustomerLock(customerId = 'customer'){
       if (data?.locked) {
         throw new Error('customer-lock-already-held');
       }
-      transaction.set(lockRef, {
+      transaction.set(lockRef, sanitizeFirestorePayload({
         locked: true,
         updatedAt: serverTimestamp()
-      }, { merge: true });
+      }), { merge: true });
     });
 
     return true;
@@ -249,10 +271,10 @@ async function releaseCustomerLock(customerId = 'customer'){
 
   try{
     const lockRef = doc(firestoreDb, 'channels', S.sessionChannelId, 'meta', 'state');
-    await setDoc(lockRef, {
+    await setDoc(lockRef, sanitizeFirestorePayload({
       locked: false,
       updatedAt: serverTimestamp()
-    }, { merge: true });
+    }), { merge: true });
 
     return true;
   }catch(err){
@@ -351,40 +373,22 @@ function syncRoleGateStatus(){
 }
 
 async function publishLiveSnapshot(payload = {}) {
-  if (S.role !== 'customer') return false;
-
-  const fullPayload = Object.assign({}, {
-    logEntries: S.logEntries,
-    transactions: S.transactions,
-    txSeq: S.txSeq,
-    totalDebit: S.totalDebit,
-    accounts: S.accounts,
-    sessionId: S.sessionId,
-    statusLabel: DOM.statusLabel ? DOM.statusLabel.textContent : ''
-  }, payload);
-
-  // ── BroadcastChannel (same device, instant) ──────────────────────
-  try {
-    const bc = getLocalChannel();
-    if (bc) {
-      bc.postMessage({ type: 'nexabank_snapshot', payload: fullPayload });
-    }
-  } catch(bcErr) {
-    logSyncWarn('BroadcastChannel post failed:', bcErr);
-  }
-
-  if (!canUseFirebaseSync() || !firestoreDb) return false;
+  if (!canUseFirebaseSync()) return false;
 
   try {
-    const snapshotRef = doc(firestoreDb, 'channels', S.sessionChannelId, 'meta', 'state');
-    await setDoc(snapshotRef, Object.assign({}, fullPayload, {
-      role: S.role,
+    const snapshotRef = doc(firestoreDb, 'channels', 'global-live-session', 'meta', 'state');
+
+    const safePayload = sanitizeFirestorePayload({
+      ...payload,
       updatedAt: serverTimestamp()
-    }), { merge: true });
+    });
 
+    logSyncInfo('publishLiveSnapshot payload', safePayload);
+
+    await setDoc(snapshotRef, safePayload, { merge: true });
     return true;
   } catch (err) {
-    logSyncWarn('publishLiveSnapshot sync error:', err);
+    console.warn(`${NEXABANK_SYNC_PREFIX} publishLiveSnapshot sync error:`, err);
 
     if (isPermissionError(err)) {
       disableFirebaseSync('publishLiveSnapshot-permission-denied', err);

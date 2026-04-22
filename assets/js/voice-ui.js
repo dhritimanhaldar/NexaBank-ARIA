@@ -91,11 +91,12 @@ function setStatus(type,label){
   DOM.ariaState.textContent=stateMap[type]||'● READY';
   if (S.role === 'customer' && typeof publishLiveSnapshot === 'function') {
     try {
-      publishLiveSnapshot({
-        status: type,
+      const syncPayload = {
+        status: typeof type === 'string' ? type : null,
         listening: !!(type === 'listening'),
         updatedFrom: 'voice-ui'
-      });
+      };
+      publishLiveSnapshot(syncPayload);
     } catch (err) {
       console.warn('[voice-ui] status sync skipped', err);
     }
