@@ -358,9 +358,9 @@ function subscribeToRemoteSession(){
   try{
     const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
     S.remoteUnsubscribe = docRef.onSnapshot(function(doc) {
-      if(doc.exists() && !S.suppressLocalSideEffects){
-        applyRemoteSnapshot(doc.data());
-      }
+            const data = getSnapshotData(doc);
+      if(data && !S.suppressLocalSideEffects){
+        applyRemoteSnapshot(data      }
     }, function(err) {
       console.error('[NexaBank] Firestore onSnapshot failed (' + err.code + '):', err.message,
         '\nCheck Firestore security rules — see the ❌ message above for instructions.');
