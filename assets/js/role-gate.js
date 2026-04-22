@@ -24,12 +24,17 @@ async function enterAsCustomer(){
     const roleGateStatus = document.getElementById('roleGateStatus');
     if(roleGateStatus) roleGateStatus.textContent = 'Joining as customer...';
     let lockAcquired = false;
+    const syncEnabledBeforeLock = typeof canUseFirebaseSync === 'function'
+      ? canUseFirebaseSync()
+      : true;
     if(typeof acquireCustomerLock === 'function'){
       lockAcquired = await acquireCustomerLock('customer').catch(() => false);
     }
     if(!lockAcquired){
       if(roleGateStatus) roleGateStatus.textContent = 'A customer session is already active. Open supervisor mode or try again.';
-      console.warn('[role-gate] Customer lock not acquired or sync unavailable; continuing locally');
+      if (syncEnabledBeforeLock) {
+        console.warn('[role-gate] Customer lock not acquired; continuing locally');
+      }
     }
     S.role = 'customer';
     S.isSupervisorView = false;

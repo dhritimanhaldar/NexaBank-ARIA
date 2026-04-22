@@ -52,7 +52,7 @@ function isPermissionError(err) {
   );
 }
 
-function canUseFirebaseSync() {
+export function canUseFirebaseSync() {
   return firebaseSyncAvailable === true;
 }
 
@@ -233,31 +233,42 @@ async function initFirebaseSync(){
   }
 }
 
-async function acquireCustomerLock(customerId = 'customer'){
-  if(!canUseFirebaseSync()) return false;
+async function acquireCustomerLock(customerId = 'customer') {
+  if (!canUseFirebaseSync()) return false;
 
-  try{
-    const lockRef = doc(firestoreDb, 'channels', S.sessionChannelId, 'meta', 'state');
+  try {
+    const safeCustomerId = typeof customerId === 'string' && customerId.trim()
+      ? customerId.trim()
+      : 'customer';
+
+    const lockRef = doc(firestoreDb, 'channels', 'global-live-session', 'locks', safeCustomerId);
+
     await runTransaction(firestoreDb, async (transaction) => {
       const snap = await transaction.get(lockRef);
-      const data = snap.exists ? snap.data() : null;
-      if (data?.locked) {
+      const data = snap.exists() ? snap.data() : null;
+
+      if (data?.locked === true) {
         throw new Error('customer-lock-already-held');
       }
+
       transaction.set(lockRef, sanitizeFirestorePayload({
         locked: true,
+        role: 'customer',
+        customerId: safeCustomerId,
         updatedAt: serverTimestamp()
       }), { merge: true });
     });
 
+    logSyncInfo(`Customer lock acquired for ${safeCustomerId}`);
     return true;
-  }catch(err){
-    if (isPermissionError(err)) {
-      disableFirebaseSync('acquireCustomerLock-permission-denied', err);
+  } catch (err) {
+    if (err?.message === 'customer-lock-already-held') {
+      logSyncWarn('Customer lock already held');
       return false;
     }
 
-    if (err?.message === 'customer-lock-already-held') {
+    if (isPermissionError(err)) {
+      disableFirebaseSync('acquireCustomerLock-permission-denied', err);
       return false;
     }
 
@@ -266,18 +277,26 @@ async function acquireCustomerLock(customerId = 'customer'){
   }
 }
 
-async function releaseCustomerLock(customerId = 'customer'){
-  if(!canUseFirebaseSync()) return false;
+async function releaseCustomerLock(customerId = 'customer') {
+  if (!canUseFirebaseSync()) return false;
 
-  try{
-    const lockRef = doc(firestoreDb, 'channels', S.sessionChannelId, 'meta', 'state');
+  try {
+    const safeCustomerId = typeof customerId === 'string' && customerId.trim()
+      ? customerId.trim()
+      : 'customer';
+
+    const lockRef = doc(firestoreDb, 'channels', 'global-live-session', 'locks', safeCustomerId);
+
     await setDoc(lockRef, sanitizeFirestorePayload({
       locked: false,
+      role: 'customer',
+      customerId: safeCustomerId,
       updatedAt: serverTimestamp()
     }), { merge: true });
 
+    logSyncInfo(`Customer lock released for ${safeCustomerId}`);
     return true;
-  }catch(err){
+  } catch (err) {
     if (isPermissionError(err)) {
       disableFirebaseSync('releaseCustomerLock-permission-denied', err);
       return false;
@@ -410,3 +429,4 @@ window.publishRemoteEvent = publishRemoteEvent;
 window.syncRoleGateStatus = syncRoleGateStatus;
 window.publishLiveSnapshot = publishLiveSnapshot;
 window.scheduledPublish = scheduledPublish;
+window.canUseFirebaseSync = canUseFirebaseSync;
