@@ -245,7 +245,7 @@ async function acquireCustomerLock(customerId = 'customer') {
 
     await runTransaction(firestoreDb, async (transaction) => {
       const snap = await transaction.get(lockRef);
-      const data = snap.exists ? snap.data() : null;
+      const data = snap.exists() ? snap.data() : null;
 
       if (data?.locked === true) {
         throw new Error('customer-lock-already-held');
@@ -358,7 +358,7 @@ function subscribeToRemoteSession(){
   try{
     const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
     S.remoteUnsubscribe = docRef.onSnapshot(function(doc) {
-      if(doc.exists && !S.suppressLocalSideEffects){
+      if(doc.exists() && !S.suppressLocalSideEffects){
         applyRemoteSnapshot(doc.data());
       }
     }, function(err) {
