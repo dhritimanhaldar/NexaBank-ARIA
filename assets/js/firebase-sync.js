@@ -298,11 +298,11 @@ async function acquireCustomerLock(customerId = 'customer') {
       ? customerId.trim()
       : 'customer';
 
-    const lockRef = doc(firestoreDb, 'channels', 'global-live-session', 'locks', safeCustomerId);
+    const lockRef = doc(firestoreDb, 'channels', safeCustomerId, 'locks', safeCustomerId);
 
     await runTransaction(firestoreDb, async (transaction) => {
       const snap = await transaction.get(lockRef);
-      const data = snap.exists ? snap.data() : null;
+      const data = snap.exists() ? snap.data() : null;
 
       if (data?.locked === true) {
         // Check if the lock is stale (previous session crashed without releasing).
@@ -379,7 +379,7 @@ async function getCustomerLockStatus(customerId) {
     const safeId = typeof customerId === 'string' && customerId.trim() ? customerId.trim() : 'customer1';
     const lockRef = doc(firestoreDb, 'channels', safeId, 'locks', safeId);
     const snap = await getDoc(lockRef);
-    if (!snap.exists) return { locked: false, stale: false };
+    if (!snap.exists()) return { locked: false, stale: false };
     const data = snap.data();
     if (!data || data.locked !== true) return { locked: false, stale: false };
 
@@ -431,25 +431,45 @@ function subscribeToRemoteSession(){
     if (bc) {
       bc.onmessage = function(event) {
         if (!event.data || event.data.type !== 'nexabank_snapshot') return;
-        if (!S.suppressLocalSideEffects) applyRemoteSnapshot(event.data.payload);
+        if (S.suppressLocalSideEffects) return;
+        applyCustomerSnapshot(event.data.customerId || 'customer1', event.data.payload);
       };
     }
   } catch(bcErr) {
     console.warn('[NexaBank] BroadcastChannel listener failed:', bcErr);
   }
 
+  if (Array.isArray(S.remoteUnsubscribes)) {
+    S.remoteUnsubscribes.forEach(fn => { try { if (typeof fn === 'function') fn(); } catch (e) {} });
+  }
+  S.remoteUnsubscribes = [];
+
   // ── Firestore (cross-device) ─────────────────────────────────────
   if(!S.firebaseAvailable || !firestoreDb) return;
   try{
-    const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
-    S.remoteUnsubscribe = docRef.onSnapshot(function(doc) {
-      const data = doc.exists ? doc.data() : null;
-      if(data && !S.suppressLocalSideEffects){
-        applyRemoteSnapshot(data);
+    ['customer1','customer2'].forEach(function(customerId){
+      const statusEl = document.getElementById(customerId === 'customer1' ? 'sup1Status' : 'sup2Status');
+      if(statusEl){
+        statusEl.textContent = 'OFFLINE';
+        statusEl.className = 'sup-status offline';
       }
-    }, function(err) {
-      console.error('[NexaBank] Firestore onSnapshot failed (' + err.code + '):', err.message,
-        '\nCheck Firestore security rules — see the ❌ message above for instructions.');
+    });
+
+    ['customer1','customer2'].forEach(function(customerId){
+      const docRef = firestoreDb.collection('channels').doc(customerId).collection('meta').doc('state');
+      const unsubscribe = docRef.onSnapshot(function(docSnap) {
+        const data = docSnap.exists() ? docSnap.data() : null;
+        if(!data || S.suppressLocalSideEffects) return;
+        applyCustomerSnapshot(customerId, data);
+      }, function(err) {
+        console.error('[NexaBank] Firestore onSnapshot failed for ' + customerId + ' (' + err.code + '):', err.message);
+        const statusEl = document.getElementById(customerId === 'customer1' ? 'sup1Status' : 'sup2Status');
+        if(statusEl){
+          statusEl.textContent = 'OFFLINE';
+          statusEl.className = 'sup-status offline';
+        }
+      });
+      S.remoteUnsubscribes.push(unsubscribe);
     });
   }catch(err){
     console.warn('[NexaBank] subscribeToRemoteSession setup failed:', err);
@@ -498,6 +518,9 @@ async function publishLiveSnapshot(payload = {}) {
     const snapshotRef = doc(firestoreDb, 'channels', channelId, 'meta', 'state');
 
     const safePayload = sanitizeFirestorePayload({
+      customerId: channelId,
+      role: S.role || 'customer',
+      heartbeatAt: payload?.heartbeatAt || Date.now(),
       ...payload,
       updatedAt: serverTimestamp()
     });

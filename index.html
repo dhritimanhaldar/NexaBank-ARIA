@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>HSBC · ARIA — Global Banking Assistant</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23db0011'/%3E%3Ctext x='50%25' y='56%25' font-size='30' text-anchor='middle' fill='white' font-family='Arial'%3EA%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="assets/css/variables.css">
@@ -194,7 +195,13 @@
         <div>Current: ₹0.00</div>
       </div>
       <div class="sup-log" id="sup1Log"></div>
-      <div class="sup-ledger" id="sup1Ledger"></div>
+      <div class="sup-ledger">
+        <div class="empty-ledger" id="sup1EmptyLedger">No actions yet.<br/>Waiting for customer activity.</div>
+        <table class="ledger" id="sup1LedgerTable" style="display:none">
+          <thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead>
+          <tbody id="sup1LedgerBody"></tbody>
+        </table>
+      </div>
     </div>
     <div class="supervisor-column">
       <h3>Customer 2</h3>
@@ -203,7 +210,13 @@
         <div>Current: ₹0.00</div>
       </div>
       <div class="sup-log" id="sup2Log"></div>
-      <div class="sup-ledger" id="sup2Ledger"></div>
+      <div class="sup-ledger">
+        <div class="empty-ledger" id="sup2EmptyLedger">No actions yet.<br/>Waiting for customer activity.</div>
+        <table class="ledger" id="sup2LedgerTable" style="display:none">
+          <thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead>
+          <tbody id="sup2LedgerBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>

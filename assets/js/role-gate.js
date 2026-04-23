@@ -28,6 +28,21 @@ async function enterAsCustomer(customerId){
     }
     S.customerProfile = CUSTOMER_PROFILES[customerId];
     S.customerId = customerId;
+    S.accounts = {
+      savings: Number(S.customerProfile?.savings || 0),
+      current: Number(S.customerProfile?.current || 0)
+    };
+    S.totalDebit = 0;
+    S.txSeq = 0;
+    S.transactions = [];
+    S.logEntries = [];
+    S.pendingTask = null;
+    S.pendingTransaction = null;
+    S.pendingClarification = null;
+    if (typeof document !== 'undefined') {
+      const sessionIdEl = document.getElementById('sessionId');
+      if (sessionIdEl && S.sessionId) sessionIdEl.textContent = S.sessionId;
+    }
 
     const roleGateStatus = document.getElementById('roleGateStatus');
     if(roleGateStatus) roleGateStatus.textContent = 'Joining as customer...';
@@ -39,7 +54,7 @@ async function enterAsCustomer(customerId){
       console.warn('[role-gate] Customer lock not acquired; continuing locally');
     }
     if(!lockAcquired){
-      if(roleGateStatus) roleGateStatus.textContent = 'A customer session is already active. Open supervisor mode or try again.';
+      if(roleGateStatus) roleGateStatus.textContent = 'Live sync unavailable for this customer. Continuing in local mode.';
       if (syncEnabledBeforeLock) {
         console.warn('[role-gate] Customer lock not acquired; continuing locally');
       }
@@ -55,6 +70,16 @@ async function enterAsCustomer(customerId){
     if(manualInput) manualInput.disabled = false;
     if(micBtn) micBtn.disabled = false;
     if(typeof addLog === 'function') addLog('system','SYSTEM','Entered customer mode. Voice and manual input enabled.');
+    if (typeof renderAccounts === 'function') renderAccounts();
+    if (typeof renderLedger === 'function') renderLedger();
+    if (typeof renderLog === 'function') renderLog();
+    if (typeof publishLiveSnapshot === 'function') {
+      publishLiveSnapshot(buildFullSnapshot({
+        role: 'customer',
+        customerId: S.customerId,
+        heartbeatAt: Date.now()
+      }));
+    }
     if(typeof initMic === 'function') initMic();
     // Heartbeat carries the full snapshot so supervisor always has current state.
     startSessionHeartbeat(() => buildFullSnapshot({

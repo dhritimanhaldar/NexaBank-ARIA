@@ -85,10 +85,13 @@ function syncPermissionOverlayOnBoot(){
 }
 
 function setStatus(type,label){
-  DOM.statusDot.className='dot '+type;
-  DOM.statusLabel.textContent=label;
+  const statusDot = DOM?.statusDot || document.getElementById('statusDot');
+  const statusLabel = DOM?.statusLabel || document.getElementById('statusLabel');
+  const ariaState = DOM?.ariaState || document.getElementById('ariaState');
+  if(statusDot) statusDot.className='dot '+type;
+  if(statusLabel) statusLabel.textContent=label;
   const stateMap={live:'● READY',listening:'◉ LISTENING',thinking:'◈ THINKING',speaking:'◎ SPEAKING',muted:'✕ MUTED'};
-  DOM.ariaState.textContent=stateMap[type]||'● READY';
+  if(ariaState) ariaState.textContent=stateMap[type]||'● READY';
   if (S.role === 'customer' && typeof scheduledPublish === 'function') {
     try {
       // Use scheduledPublish so buildFullSnapshot() wraps the payload —
@@ -112,9 +115,15 @@ function setOrbSpin(on){
 }
 
 function showToast(icon,msg){
-  const t=DOM.toast;
-  t.innerHTML=icon+' '+msg; t.classList.add('show');
-  clearTimeout(window.toastT); window.toastT=setTimeout(()=>t.classList.remove('show'),4000);
+  const t = (typeof DOM !== 'undefined' && DOM.toast) ? DOM.toast : document.getElementById('toast');
+  if(!t){
+    console.warn('[voice-ui] toast element not found:', icon, msg);
+    return;
+  }
+  t.innerHTML = icon + ' ' + msg;
+  t.classList.add('show');
+  clearTimeout(window.toastT);
+  window.toastT = setTimeout(() => t.classList.remove('show'), 4000);
 }
 
 function updateMicBtn(){

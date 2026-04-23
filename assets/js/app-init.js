@@ -1,6 +1,9 @@
 function handleRoleSelection(role) {
   console.log(`[role] selected: ${role}`);
   setCurrentRole(role);
+  if (role === 'customer1' || role === 'customer2') {
+    S.customerId = role;
+  }
   const roleGate = document.getElementById('roleGate');
   if (roleGate) roleGate.style.display = 'none';
   if (role === 'supervisor') {

@@ -73,6 +73,7 @@ const S = {
   heartbeatIntervalMs: 5000,
   heartbeatExpiryMs: 15000,
   remoteUnsubscribe: null,
+  remoteUnsubscribes: [],
   presenceUnsubscribe: null,
   suppressLocalSideEffects: false,
   firebaseAvailable: false
