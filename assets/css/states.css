@@ -81,3 +81,78 @@ body.supervisor-mode .agent-col .tbox        { display: none !important; }
 body.supervisor-mode .agent-col .manual-wrap { display: none !important; }
 body.supervisor-mode .agent-col .hints       { display: none !important; }
 body.supervisor-mode .agent-col .accounts    { padding-top: 16px; }
+
+/* Supervisor View Styles */
+.supervisor-view {
+  padding: 20px;
+  background: var(--color-surface);
+  min-height: 100vh;
+}
+
+.supervisor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 10px;
+}
+
+.supervisor-header h2 {
+  margin: 0;
+  color: var(--color-text);
+}
+
+.supervisor-status {
+  display: flex;
+  gap: 20px;
+}
+
+.supervisor-status span {
+  padding: 5px 10px;
+  border-radius: 4px;
+  background: var(--color-surface-alt);
+  color: var(--color-text-soft);
+}
+
+.supervisor-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.supervisor-column {
+  background: var(--color-surface-alt);
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.supervisor-column h3 {
+  margin: 0 0 10px 0;
+  color: var(--color-text);
+}
+
+.sup-balances {
+  margin-bottom: 15px;
+  font-size: 14px;
+}
+
+.sup-balances div {
+  margin-bottom: 5px;
+}
+
+.sup-log, .sup-ledger {
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--color-surface);
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sup-log {
+  margin-bottom: 10px;
+}

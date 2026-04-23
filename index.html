@@ -30,7 +30,8 @@
     <div class="role-gate-title">Welcome to HSBC</div>
     <div class="role-gate-sub">Select how you want to enter this HSBC Global Banking session.</div>
     <div class="role-gate-actions">
-      <button id="customerRole" class="perm-btn">Enter as Customer</button>
+      <button id="customer1Role" class="perm-btn">Enter as Customer 1</button>
+      <button id="customer2Role" class="perm-btn">Enter as Customer 2</button>
       <button id="supervisorRole" class="log-btn">Enter as Supervisor</button>
     </div>
     <div id="roleGateStatus" class="role-gate-status">Checking live session availability…</div>
@@ -126,13 +127,13 @@
       <div class="col-head" style="padding:0 0 10px;border:none">Linked Accounts</div>
       <div class="acct-card" id="savingsCard">
         <div class="acct-type">Savings Account</div>
-        <div class="acct-num">•••• •••• 4821</div>
+        <div class="acct-num" id="savingsAccountNum">•••• •••• 4821</div>
         <div class="acct-bal green" id="savingsBal">₹ 1,24,500.00</div>
         <div class="acct-chg" id="savingsChg"></div>
       </div>
       <div class="acct-card" id="currentCard">
         <div class="acct-type">Current Account</div>
-        <div class="acct-num">•••• •••• 9034</div>
+        <div class="acct-num" id="currentAccountNum">•••• •••• 9034</div>
         <div class="acct-bal amber" id="currentBal">₹ 58,200.00</div>
         <div class="acct-chg" id="currentChg"></div>
       </div>
@@ -175,7 +176,37 @@
   </div>
 </div>
 </div>
-<div class="toast" id="toast"></div>
+
+<!-- Supervisor View -->
+<div id="supervisorView" class="supervisor-view" style="display:none">
+  <div class="supervisor-header">
+    <h2>Supervisor Dashboard</h2>
+    <div class="supervisor-status">
+      <span id="sup1Status">Customer 1: Offline</span>
+      <span id="sup2Status">Customer 2: Offline</span>
+    </div>
+  </div>
+  <div class="supervisor-columns">
+    <div class="supervisor-column">
+      <h3>Customer 1</h3>
+      <div class="sup-balances" id="sup1Balances">
+        <div>Savings: ₹0.00</div>
+        <div>Current: ₹0.00</div>
+      </div>
+      <div class="sup-log" id="sup1Log"></div>
+      <div class="sup-ledger" id="sup1Ledger"></div>
+    </div>
+    <div class="supervisor-column">
+      <h3>Customer 2</h3>
+      <div class="sup-balances" id="sup2Balances">
+        <div>Savings: ₹0.00</div>
+        <div>Current: ₹0.00</div>
+      </div>
+      <div class="sup-log" id="sup2Log"></div>
+      <div class="sup-ledger" id="sup2Ledger"></div>
+    </div>
+  </div>
+</div>
 
 <script src="assets/js/helpers.js"></script>
 <script src="assets/js/profile.js"></script>

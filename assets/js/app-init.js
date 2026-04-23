@@ -7,6 +7,11 @@ function handleRoleSelection(role) {
     if (typeof enterAsSupervisor === 'function') enterAsSupervisor();
     return;
   }
+  if (role === 'customer1' || role === 'customer2') {
+    appState.customerId = role;
+    showMicPermissionPrompt();
+    return;
+  }
   showMicPermissionPrompt();
 }
 
@@ -36,8 +41,8 @@ function continueAfterMicPermission(role) {
 
   closeMicPermissionUi();
 
-  if (role === 'customer') {
-    return startCustomerFlow();
+  if (role === 'customer' || role === 'customer1' || role === 'customer2') {
+    return startCustomerFlow(appState.customerId || role);
   }
 
   if (role === 'supervisor') {
@@ -47,9 +52,9 @@ function continueAfterMicPermission(role) {
   console.warn('[flow] unknown role during post-permission continuation', role);
 }
 
-function startCustomerFlow() {
+function startCustomerFlow(customerId) {
   if (typeof enterAsCustomer === 'function') {
-    return enterAsCustomer();
+    return enterAsCustomer(customerId);
   }
 }
 
@@ -78,20 +83,26 @@ function startSupervisorFlow() {
   }
 
   await Promise.resolve(
-    window.NexaBankGlobals?.bootRoleGate
-      ? window.NexaBankGlobals.bootRoleGate()
+    window.NexaBankGlobals?.refreshRoleGateButtons
+      ? window.NexaBankGlobals.refreshRoleGateButtons()
       : false
   ).catch((err) => {
-    console.warn('[app-init] bootRoleGate failed', err);
+    console.warn('[app-init] refreshRoleGateButtons failed', err);
   });
 
-  const customerRoleButton = DOM.customerRoleButton || document.getElementById('customerRole');
+  const customer1RoleButton = DOM.customer1RoleButton || document.getElementById('customer1Role');
+  const customer2RoleButton = DOM.customer2RoleButton || document.getElementById('customer2Role');
   const supervisorRoleButton = DOM.supervisorRoleButton || document.getElementById('supervisorRole');
   const allowMicButton = DOM.allowMicButton || document.getElementById('allowMicrophoneBtn');
 
-  if (customerRoleButton && !customerRoleButton.dataset.bound) {
-    customerRoleButton.addEventListener('click', () => handleRoleSelection('customer'));
-    customerRoleButton.dataset.bound = 'true';
+  if (customer1RoleButton && !customer1RoleButton.dataset.bound) {
+    customer1RoleButton.addEventListener('click', () => handleRoleSelection('customer1'));
+    customer1RoleButton.dataset.bound = 'true';
+  }
+
+  if (customer2RoleButton && !customer2RoleButton.dataset.bound) {
+    customer2RoleButton.addEventListener('click', () => handleRoleSelection('customer2'));
+    customer2RoleButton.dataset.bound = 'true';
   }
 
   if (supervisorRoleButton && !supervisorRoleButton.dataset.bound) {
@@ -106,7 +117,7 @@ function startSupervisorFlow() {
 
   window.addEventListener('beforeunload', () => {
     if(window.S && S.role === 'customer' && typeof releaseCustomerLock === 'function'){
-      releaseCustomerLock();
+      releaseCustomerLock(S.customerId);
     }
   });
 })();

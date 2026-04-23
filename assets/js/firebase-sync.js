@@ -7,6 +7,7 @@ let firebaseSyncAvailable = false;
 let firebaseSyncInitialized = false;
 let firebaseSyncDisabledReason = '';
 let heartbeatIntervalId = null;
+const STALE_LOCK_MS = 30000;
 
 function logSyncInfo(message, extra) {
   if (typeof extra !== 'undefined') {
@@ -128,30 +129,70 @@ function getLocalChannel() {
 
 // Shared function that both Firebase and BroadcastChannel paths call
 // when the supervisor tab receives a snapshot.
-function applyRemoteSnapshot(data) {
+// applyCustomerSnapshot — called on supervisor tab to update the correct customer column.
+function applyCustomerSnapshot(customerId, data) {
   if (!data) return;
-  if (data.logEntries) S.logEntries = data.logEntries;
-  if (data.txSeq !== undefined) {
-    S.txSeq = data.txSeq;
-    if (DOM.ledgerCount) DOM.ledgerCount.textContent = S.txSeq + ' action' + (S.txSeq !== 1 ? 's' : '');
-    if (DOM.totalActions) DOM.totalActions.textContent = S.txSeq;
-    if (DOM.txnCount) DOM.txnCount.textContent = S.txSeq;
+
+  const isC1 = customerId === 'customer1';
+  const logEl      = document.getElementById(isC1 ? 'sup1Log'        : 'sup2Log');
+  const statusEl   = document.getElementById(isC1 ? 'sup1Status'     : 'sup2Status');
+  const balEl      = document.getElementById(isC1 ? 'sup1Balances'   : 'sup2Balances');
+  const bodyEl     = document.getElementById(isC1 ? 'sup1LedgerBody' : 'sup2LedgerBody');
+  const tableEl    = document.getElementById(isC1 ? 'sup1LedgerTable': 'sup2LedgerTable');
+  const emptyEl    = document.getElementById(isC1 ? 'sup1EmptyLedger': 'sup2EmptyLedger');
+
+  // ── Online / offline badge ──────────────────────────────────────
+  if (statusEl) {
+    const lastBeat = data.heartbeatAt || 0;
+    const isOnline = lastBeat && (Date.now() - lastBeat) < 15000;
+    statusEl.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
+    statusEl.className = 'sup-status ' + (isOnline ? 'online' : 'offline');
   }
-  if (data.totalDebit !== undefined) {
-    S.totalDebit = data.totalDebit;
-    if (DOM.totalDebit) DOM.totalDebit.textContent = '₹ ' + S.totalDebit.toLocaleString('en-IN');
+
+  // ── Balances ────────────────────────────────────────────────────
+  if (balEl && data.accounts) {
+    const fmt = n => '₹ ' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    balEl.innerHTML =
+      '<span>Savings: <strong>' + fmt(data.accounts.savings) + '</strong></span>' +
+      '&nbsp;&nbsp;<span>Current: <strong>' + fmt(data.accounts.current) + '</strong></span>';
   }
-  if (data.accounts) {
-    S.accounts = data.accounts;
-    if (DOM.savingsBal) DOM.savingsBal.textContent = '₹ ' + S.accounts.savings.toLocaleString('en-IN', {minimumFractionDigits:2});
-    if (DOM.currentBal) DOM.currentBal.textContent = '₹ ' + S.accounts.current.toLocaleString('en-IN', {minimumFractionDigits:2});
+
+  // ── Interaction log ─────────────────────────────────────────────
+  if (logEl && data.logEntries) {
+    logEl.innerHTML = '';
+    const icons = { user: '👤', aria: '🤖', action: '⚡', system: '⚙', error: '✕' };
+    data.logEntries.slice(-60).forEach(function (e) {
+      const div = document.createElement('div');
+      div.className = 'entry ' + e.type;
+      div.innerHTML =
+        '<div class="eicon ' + e.type + '">' + (icons[e.type] || '•') + '</div>' +
+        '<div class="ebody"><div class="emeta"><span class="ewho ' + e.type + '">' + Helpers.esc(e.who) + '</span>' +
+        '<span class="etime">' + e.time + '</span></div>' +
+        '<div class="emsg">' + Helpers.esc(e.msg) + '</div></div>';
+      logEl.appendChild(div);
+    });
+    logEl.scrollTop = logEl.scrollHeight;
   }
-  if (data.statusLabel && DOM.statusLabel) DOM.statusLabel.textContent = data.statusLabel;
-  if (data.transactions) {
-    S.transactions = data.transactions;
-    if (typeof renderLedger === 'function') renderLedger();
+
+  // ── Transaction ledger ──────────────────────────────────────────
+  if (bodyEl && data.transactions) {
+    if (data.transactions.length > 0) {
+      if (emptyEl) emptyEl.style.display = 'none';
+      if (tableEl) tableEl.style.display = '';
+      bodyEl.innerHTML = '';
+      [...data.transactions].reverse().forEach(function (t) {
+        const row = document.createElement('tr');
+        row.innerHTML =
+          '<td style="color:var(--color-text-soft)">' + t.seq + '</td>' +
+          '<td style="color:var(--color-text-soft);white-space:nowrap">' + t.time + '</td>' +
+          '<td><span class="badge ' + t.action + '">' + Helpers.actionLabel(t.action) + '</span></td>' +
+          '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + Helpers.esc(t.detail || '') + '">' + Helpers.esc(t.detail || '—') + '</td>' +
+          '<td><span class="amt ' + t.amtClass + '">' + t.amount + '</span></td>' +
+          '<td><span class="sbadge ' + t.status + '">' + t.status + '</span></td>';
+        bodyEl.appendChild(row);
+      });
+    }
   }
-  if (typeof renderLog === 'function') renderLog();
 }
 
 // Builds the complete state snapshot the supervisor needs to mirror the customer UI.
@@ -309,7 +350,7 @@ async function releaseCustomerLock(customerId = 'customer') {
       ? customerId.trim()
       : 'customer';
 
-    const lockRef = doc(firestoreDb, 'channels', 'global-live-session', 'locks', safeCustomerId);
+    const lockRef = doc(firestoreDb, 'channels', safeCustomerId, 'locks', safeCustomerId);
 
     await setDoc(lockRef, sanitizeFirestorePayload({
       locked: false,
@@ -328,6 +369,26 @@ async function releaseCustomerLock(customerId = 'customer') {
 
     logSyncWarn('releaseCustomerLock error', err);
     return false;
+  }
+}
+
+async function getCustomerLockStatus(customerId) {
+  if (!canUseFirebaseSync() || !firestoreDb) return { locked: false, stale: false };
+
+  try {
+    const safeId = typeof customerId === 'string' && customerId.trim() ? customerId.trim() : 'customer1';
+    const lockRef = doc(firestoreDb, 'channels', safeId, 'locks', safeId);
+    const snap = await getDoc(lockRef);
+    if (!snap.exists) return { locked: false, stale: false };
+    const data = snap.data();
+    if (!data || data.locked !== true) return { locked: false, stale: false };
+
+    const lockedAtMs = data.updatedAt?.toMillis?.() ?? 0;
+    const isStale = lockedAtMs === 0 || (Date.now() - lockedAtMs) > STALE_LOCK_MS;
+    return { locked: !isStale, stale: isStale };
+  } catch (err) {
+    logSyncWarn('getCustomerLockStatus error', err);
+    return { locked: false, stale: false };
   }
 }
 
@@ -420,12 +481,13 @@ async function publishLiveSnapshot(payload = {}) {
   // Only the customer tab should ever publish state — supervisor is read-only.
   if (S.role && S.role !== 'customer') return false;
 
+  const channelId = S.customerId || 'global-live-session';
+
   // ── Same-device tab sync (zero latency via BroadcastChannel) ────────────
-  // Post BEFORE the Firestore await so the supervisor tab updates instantly
-  // when both tabs are on the same device.
+  // Include customerId so the supervisor panel can route to the right column.
   try {
     const bc = getLocalChannel();
-    if (bc) bc.postMessage({ type: 'nexabank_snapshot', payload });
+    if (bc) bc.postMessage({ type: 'nexabank_snapshot', customerId: channelId, payload });
   } catch (bcErr) {
     console.warn('[NexaBank] BroadcastChannel post failed:', bcErr);
   }
@@ -433,7 +495,7 @@ async function publishLiveSnapshot(payload = {}) {
   if (!canUseFirebaseSync()) return false;
 
   try {
-    const snapshotRef = doc(firestoreDb, 'channels', 'global-live-session', 'meta', 'state');
+    const snapshotRef = doc(firestoreDb, 'channels', channelId, 'meta', 'state');
 
     const safePayload = sanitizeFirestorePayload({
       ...payload,
@@ -469,4 +531,6 @@ if (typeof window !== 'undefined') {
   window.canUseFirebaseSync = canUseFirebaseSync;
   window.subscribeToRemoteSession = subscribeToRemoteSession;
   window.syncRoleGateStatus = syncRoleGateStatus;
+  window.getCustomerLockStatus = getCustomerLockStatus;
+  window.applyCustomerSnapshot = applyCustomerSnapshot;
 }

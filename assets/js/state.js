@@ -1,3 +1,33 @@
+const CUSTOMER_PROFILES = {
+  customer1: {
+    fullName: 'Dhritiman Haldar',
+    mobile: '+91 98765 43210',
+    email: 'dhritiman@example.com',
+    city: 'Pune',
+    address: 'Baner, Pune, Maharashtra',
+    panMasked: 'ABCDE1234X',
+    kycStatus: 'Verified',
+    savings: 124500,
+    current: 58200,
+    savingsAccNum: '4821',
+    currentAccNum: '9034'
+  },
+  customer2: {
+    fullName: 'Priya Sharma',
+    mobile: '+91 91234 56789',
+    email: 'priya.sharma@example.com',
+    city: 'Mumbai',
+    address: 'Bandra West, Mumbai, Maharashtra',
+    panMasked: 'FGHIJ5678Y',
+    kycStatus: 'Verified',
+    savings: 287300,
+    current: 112850,
+    savingsAccNum: '7362',
+    currentAccNum: '5518'
+  }
+};
+window.CUSTOMER_PROFILES = CUSTOMER_PROFILES;
+
 const S = {
   isListening:  false,
   isThinking:   false,
@@ -16,16 +46,9 @@ const S = {
   activeModal: null,
 
   sessionId: 'SES-'+Math.random().toString(36).slice(2,7).toUpperCase(),
-  accounts:  { savings:124500, current:58200 },
-  customerProfile: {
-    fullName: 'Dhritiman Haldar',
-    mobile: '+91 98765 43210',
-    email: 'dhritiman@example.com',
-    city: 'Pune',
-    address: 'Baner, Pune, Maharashtra',
-    panMasked: 'ABCDE1234X',
-    kycStatus: 'Verified'
-  },
+  accounts:  { savings: 0, current: 0 },
+  customerProfile: null,
+  customerId: null,
   totalDebit:0, txSeq:0, logEntries:[], transactions:[],
 
   recognition:   null,

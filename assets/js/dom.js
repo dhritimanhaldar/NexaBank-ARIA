@@ -31,7 +31,8 @@ const DOM = {
   currentCard: document.getElementById('currentCard'),
   roleGate: document.getElementById('roleGate'),
   roleGateStatus: document.getElementById('roleGateStatus'),
-  customerRoleButton: document.getElementById('customerRole'),
+  customer1RoleButton: document.getElementById('customerRole1'),
+  customer2RoleButton: document.getElementById('customerRole2'),
   supervisorRoleButton: document.getElementById('supervisorRole'),
   allowMicButton: document.getElementById('allowMicrophoneBtn'),
   micPermissionScreen: document.getElementById('micPermissionScreen'),
@@ -39,7 +40,22 @@ const DOM = {
   enterCustomerBtn: document.getElementById('enterCustomerBtn'),
   enterSupervisorBtn: document.getElementById('enterSupervisorBtn'),
   roleBadge: document.getElementById('roleBadge'),
-  liveModeBadge: document.getElementById('liveModeBadge')
+  liveModeBadge: document.getElementById('liveModeBadge'),
+  supervisorView: document.getElementById('supervisorView'),
+  sup1Log: document.getElementById('sup1Log'),
+  sup1Status: document.getElementById('sup1Status'),
+  sup1Balances: document.getElementById('sup1Balances'),
+  sup1LedgerBody: document.getElementById('sup1LedgerBody'),
+  sup1LedgerTable: document.getElementById('sup1LedgerTable'),
+  sup1EmptyLedger: document.getElementById('sup1EmptyLedger'),
+  sup2Log: document.getElementById('sup2Log'),
+  sup2Status: document.getElementById('sup2Status'),
+  sup2Balances: document.getElementById('sup2Balances'),
+  sup2LedgerBody: document.getElementById('sup2LedgerBody'),
+  sup2LedgerTable: document.getElementById('sup2LedgerTable'),
+  sup2EmptyLedger: document.getElementById('sup2EmptyLedger'),
+  savingsAccNum: document.getElementById('savingsAccNum'),
+  currentAccNum: document.getElementById('currentAccNum')
 };
 
 window.DOM = DOM;

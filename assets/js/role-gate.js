@@ -1,4 +1,4 @@
-async function bootRoleGate(){
+async function refreshRoleGateButtons(){
   try{
     const roleGate = document.getElementById('roleGate');
     const enterCustomerBtn = document.getElementById('enterCustomerBtn');
@@ -15,18 +15,26 @@ async function bootRoleGate(){
     if(roleGate) roleGate.style.display = 'flex';
     updateRoleBadge();
   }catch(err){
-    console.warn('bootRoleGate failed:', err);
+    console.warn('refreshRoleGateButtons failed:', err);
   }
 }
 
-async function enterAsCustomer(){
+async function enterAsCustomer(customerId){
   try{
+    // Load customer profile
+    if (!CUSTOMER_PROFILES[customerId]) {
+      console.error('[role-gate] Invalid customerId:', customerId);
+      return;
+    }
+    S.customerProfile = CUSTOMER_PROFILES[customerId];
+    S.customerId = customerId;
+
     const roleGateStatus = document.getElementById('roleGateStatus');
     if(roleGateStatus) roleGateStatus.textContent = 'Joining as customer...';
     const syncEnabledBeforeLock = typeof canUseFirebaseSync === 'function'
       ? canUseFirebaseSync()
       : true;
-    const lockAcquired = await acquireCustomerLock('customer').catch(() => false);
+    const lockAcquired = await acquireCustomerLock(customerId).catch(() => false);
     if (syncEnabledBeforeLock && !lockAcquired) {
       console.warn('[role-gate] Customer lock not acquired; continuing locally');
     }
@@ -106,14 +114,14 @@ function setLiveModeBadge(mode){
   }
 }
 
-window.bootRoleGate = bootRoleGate;
+window.refreshRoleGateButtons = refreshRoleGateButtons;
 window.enterAsCustomer = enterAsCustomer;
 window.enterAsSupervisor = enterAsSupervisor;
 window.updateRoleBadge = updateRoleBadge;
 window.setLiveModeBadge = setLiveModeBadge;
 
 if (typeof window !== 'undefined') {
-  window.bootRoleGate = bootRoleGate;
+  window.refreshRoleGateButtons = refreshRoleGateButtons;
   window.enterAsCustomer = enterAsCustomer;
   window.enterAsSupervisor = enterAsSupervisor;
 }
