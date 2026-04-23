@@ -245,7 +245,7 @@ async function acquireCustomerLock(customerId = 'customer') {
 
     await runTransaction(firestoreDb, async (transaction) => {
       const snap = await transaction.get(lockRef);
-      const data = snap.exists() ? snap.data() : null;
+      const data = snap.exists ? snap.data() : null;
 
       if (data?.locked === true) {
         throw new Error('customer-lock-already-held');
