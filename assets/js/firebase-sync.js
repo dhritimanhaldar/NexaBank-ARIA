@@ -358,9 +358,10 @@ function subscribeToRemoteSession(){
   try{
     const docRef = firestoreDb.collection('channels').doc(S.sessionChannelId).collection('meta').doc('state');
     S.remoteUnsubscribe = docRef.onSnapshot(function(doc) {
-            const data = getSnapshotData(doc);
+      const data = doc.exists ? doc.data() : null;
       if(data && !S.suppressLocalSideEffects){
-        applyRemoteSnapshot(data      }
+        applyRemoteSnapshot(data);
+      }
     }, function(err) {
       console.error('[NexaBank] Firestore onSnapshot failed (' + err.code + '):', err.message,
         '\nCheck Firestore security rules — see the ❌ message above for instructions.');
@@ -428,4 +429,6 @@ if (typeof window !== 'undefined') {
   window.acquireCustomerLock = acquireCustomerLock;
   window.releaseCustomerLock = releaseCustomerLock;
   window.canUseFirebaseSync = canUseFirebaseSync;
+  window.subscribeToRemoteSession = subscribeToRemoteSession;
+  window.syncRoleGateStatus = syncRoleGateStatus;
 }
