@@ -109,7 +109,6 @@ function scheduleAutoListen(delay=1000){
   if(S.autoListenTimer) clearTimeout(S.autoListenTimer);
   S.autoListenTimer=setTimeout(()=>{
     if(!S.isListening&&!S.isThinking&&!S.isSpeaking&&!S.isMuted&&S.micReady){
-      addLog('system','SYSTEM','Auto-listening activated…');
       startListening();
     }
   },delay);

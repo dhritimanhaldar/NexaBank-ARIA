@@ -82,7 +82,7 @@ const NLP = {
 
   name(t){
     const sw=['my','the','a','an','from','to','savings','current','account','balance','rupees','rs','inr'];
-    const m=t.match(/(?:to|pay|send|transfer\s+(?:to)?)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i);
+    const m=t.match(/(?:to|pay|send|transfer|give|forward|dispatch|pass|credit)\s+(?:to\s+)?([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i);
     if(!m) return null;
     const n=m[1].trim().split(/\s+/).filter(w=>!sw.includes(w.toLowerCase())).join(' ');
     return n.length>1?n.charAt(0).toUpperCase()+n.slice(1):null;
@@ -143,24 +143,24 @@ const NLP = {
     if(/\b(international|overseas|abroad|foreign|cross.?border|iban|bic|swift)\b/.test(t) && /\b(transfer|send|wire|remit)\b/.test(t))
       return { intent:'international_transfer', amount:this.amount(text), to:this.name(text), account:this.account(t) };
 
-    if(/\b(transfer|send|wire|remit|neft|imps|upi|move)\b/.test(t) && !/bill/.test(t))
+    if(/\b(transfer|send|wire|remit|neft|imps|upi|move|give|pass|forward|dispatch|shift|deposit|credit)\b/.test(t) && !/bill/.test(t))
       return { intent:'transfer', amount:this.amount(text), to:this.name(text), account:this.account(t) };
 
     if(
-      /\b(pay|payment|settle|clear)\b.*\bbill\b/.test(t) ||
-      /\b(pay|settle)\s+(electricity|water|gas|internet|mobile|phone|insurance|rent|emi|fees)\b/.test(t) ||
+      /\b(pay|payment|settle|clear|discharge|recharge)\b.*\bbill\b/.test(t) ||
+      /\b(pay|settle|clear|discharge|recharge)\s+(electricity|water|gas|internet|mobile|phone|insurance|rent|emi|fees)\b/.test(t) ||
       /\b(electricity|water|gas|internet|mobile|phone|insurance|rent|emi)\s+bill\b/.test(t) ||
       /\bbill payment\b/.test(t)
     )
       return { intent:'pay_bill', amount:this.amount(text), biller:this.biller(text), account:this.account(t) };
 
-    if(/\b(balance|how much|available amount)\b/.test(t) && !/send|transfer|pay/.test(t))
+    if(/\b(balance|how much|available amount|available funds|what.?s left|how much do i have|account total|my funds|remaining amount)\b/.test(t) && !/send|transfer|pay/.test(t))
       return { intent:'check_balance', account:/current/.test(t)?'current':/savings/.test(t)?'savings':'both' };
 
-    if(/\b(block|freeze|lock|disable|lost|stolen|cancel)\b.*\b(card|debit|credit)\b/.test(t) || /\b(card|debit)\b.*\b(block|lost|stolen|freeze)\b/.test(t))
+    if(/\b(block|freeze|lock|disable|lost|stolen|cancel|suspend|deactivate|destroy)\b.*\b(card|debit|credit)\b/.test(t) || /\b(card|debit)\b.*\b(block|lost|stolen|freeze|suspend|stolen)\b/.test(t))
       return { intent:'block_card', account:this.account(t) };
 
-    if(/\b(statement|passbook|history|mini statement)\b/.test(t)){
+    if(/\b(statement|passbook|history|mini statement|account log|records|account report|transaction report|show transactions|my transactions)\b/.test(t)){
       const m=t.match(/(\d+|last|three|six|one|two)\s*months?/);
       return { intent:'request_statement', period:m?m[0]:'last month', account:this.account(t) };
     }
@@ -173,6 +173,60 @@ const NLP = {
 
     return { intent:'unknown', raw:text };
   }
+};
+
+// ── Partial-keyword intent scoring ───────────────────────────────────────────
+// Maps each intent to the words/phrases that are strong signals for it.
+// Used when NLP.classify() returns 'unknown' (garbled / broken English input).
+NLP.INTENT_SIGNALS = {
+  transfer: [
+    'transfer','send','wire','remit','neft','imps','upi','move','give','pass',
+    'forward','dispatch','shift','credit to','debit from','deposit to'
+  ],
+  pay_bill: [
+    'pay','payment','bill','settle','clear','discharge','recharge',
+    'electricity','electric','water','gas','internet','broadband',
+    'mobile','phone','insurance','rent','emi','fees','credit card'
+  ],
+  check_balance: [
+    'balance','how much','available','funds','amount left','what\'s left',
+    'account total','how much do i have','what do i have'
+  ],
+  block_card: [
+    'block','freeze','lock','disable','lost','stolen','cancel card',
+    'suspend','deactivate','destroy card'
+  ],
+  request_statement: [
+    'statement','passbook','history','mini statement','account log',
+    'records','report','transactions','last transactions','show transactions'
+  ],
+  international_transfer: [
+    'international','overseas','abroad','foreign','cross border',
+    'iban','bic','swift','wire abroad','send overseas'
+  ]
+};
+
+// Returns an array of { intent, score, label } sorted by score descending.
+// score = number of signal words found in the lowercased input text.
+NLP.scorePartialIntent = function(text) {
+  const t = String(text || '').toLowerCase();
+  const LABELS = {
+    transfer: 'transfer money to someone',
+    pay_bill: 'pay a bill',
+    check_balance: 'check your account balance',
+    block_card: 'block your card',
+    request_statement: 'get an account statement',
+    international_transfer: 'make an international transfer'
+  };
+
+  return Object.entries(NLP.INTENT_SIGNALS)
+    .map(([intent, signals]) => ({
+      intent,
+      label: LABELS[intent],
+      score: signals.filter(sig => t.includes(sig)).length
+    }))
+    .filter(r => r.score > 0)
+    .sort((a, b) => b.score - a.score);
 };
 
 window.NLP = NLP;

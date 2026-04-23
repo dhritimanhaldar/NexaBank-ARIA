@@ -1,3 +1,39 @@
+// ── Clarification state ───────────────────────────────────────────────────────
+// Set when ARIA asks "Did you mean X or Y?" for garbled input.
+// Structure: { options: [{intent, label, command}], rawText: string }
+// Cleared as soon as the user confirms or cancels.
+
+function buildClarificationPrompt(matches, rawText) {
+  if (matches.length === 1) {
+    return `I think I heard "${rawText}". Did you mean to ${matches[0].label}? Please say yes or no.`;
+  }
+  const options = matches
+    .slice(0, 3)
+    .map((m, i) => `${i + 1}. ${m.label.charAt(0).toUpperCase() + m.label.slice(1)}`)
+    .join(', ');
+  return `I caught part of what you said but I am not sure I understood fully. Did you mean: ${options}? Please say the number or repeat your request.`;
+}
+
+function resolveClarificationReply(replyText, options) {
+  const t = String(replyText || '').toLowerCase().trim();
+
+  // "yes" / "correct" / "that" / "that one" → pick option 1 (highest score)
+  if (/\b(yes|yeah|yep|correct|right|that|that one|affirmative|sure|ok|okay)\b/.test(t)) {
+    return options[0];
+  }
+  // Numeric: "1", "one", "first", "second", "third"
+  const numMap = { '1': 0, 'one': 0, 'first': 0, '2': 1, 'two': 1, 'second': 1, '3': 2, 'three': 2, 'third': 2 };
+  for (const [word, idx] of Object.entries(numMap)) {
+    if (new RegExp(`\\b${word}\\b`).test(t) && options[idx]) return options[idx];
+  }
+  // Keyword match against option labels
+  for (const opt of options) {
+    const keyWords = opt.label.split(/\s+/).filter(w => w.length > 3);
+    if (keyWords.some(kw => t.includes(kw))) return opt;
+  }
+  return null;
+}
+
 function isCancelIntent(text){
   return /\b(cancel|stop|nevermind|never mind|forget it|do not proceed|don't proceed|dont proceed|cancel transaction|stop transaction)\b/i.test(String(text || ''));
 }
@@ -53,7 +89,7 @@ function inferIntentFromText(text){
   if(parsed.intent === 'transfer' || parsed.intent === 'pay_bill') return parsed.intent;
 
   const t = String(text || '').toLowerCase();
-  if(/\b(transfer|send|remit|wire|upi|neft|imps)\b/.test(t)) return 'transfer';
+  if(/\b(transfer|send|remit|wire|upi|neft|imps|give|move|forward|dispatch|shift|deposit|credit)\b/.test(t)) return 'transfer';
   if(/\b(pay|payment|bill|electricity|water|gas|internet|mobile|phone|insurance|rent|emi)\b/.test(t)) return 'pay_bill';
 
   return null;
@@ -212,11 +248,35 @@ function processInput(text){
 
   const cancelWords = /\b(cancel|stop|do not proceed|don't proceed|dont proceed|cancel transaction|nevermind|never mind)\b/i;
 
-  if(isCancelIntent(rawText) && (S.pendingTask || S.pendingTransaction)){
+  if(isCancelIntent(rawText) && (S.pendingTask || S.pendingTransaction || S.pendingClarification)){
     S.pendingTask = null;
     S.pendingTransaction = null;
-    const spoken = "Okay, I've cancelled that transaction. How else can I help you?";
+    S.pendingClarification = null;
+    const spoken = "Okay, I've cancelled that. How else can I help you?";
     speakPendingResponse(rawText, spoken, 'Pending task cancelled.');
+    return;
+  }
+
+  // ── Resolve a pending "Did you mean?" clarification ──────────────────────
+  if (S.pendingClarification) {
+    const { options, rawText: origRaw } = S.pendingClarification;
+    const chosen = resolveClarificationReply(rawText, options);
+
+    if (chosen) {
+      S.pendingClarification = null;
+      addLog('system', 'SYSTEM', `Clarified intent: ${chosen.label}`);
+      // Re-process using the clarified command so the normal intent flow handles it
+      processInput(chosen.command);
+      return;
+    }
+
+    // Could not resolve → ask once more then give up
+    S.pendingClarification = null;
+    speakPendingResponse(
+      rawText,
+      "I'm sorry, I still couldn't understand. Could you please repeat your request clearly?",
+      'Clarification failed — reset.'
+    );
     return;
   }
 
@@ -241,6 +301,33 @@ function processInput(text){
   }
 
   const parsed = NLP.classify(rawText);
+
+  // ── Partial keyword / broken-English fallback ─────────────────────────────
+  if (parsed.intent === 'unknown') {
+    const partialMatches = NLP.scorePartialIntent(rawText);
+
+    if (partialMatches.length > 0) {
+      // Build clarification options with a minimal ready-to-execute command per intent
+      const options = partialMatches.slice(0, 3).map(m => ({
+        intent: m.intent,
+        label: m.label,
+        // A minimal synthetic command processInput() can understand
+        command: {
+          transfer: 'transfer money',
+          pay_bill: 'pay bill',
+          check_balance: 'check balance',
+          block_card: 'block card',
+          request_statement: 'account statement',
+          international_transfer: 'international transfer'
+        }[m.intent] || m.intent
+      }));
+
+      S.pendingClarification = { options, rawText };
+      const spoken = buildClarificationPrompt(partialMatches, rawText);
+      speakPendingResponse(rawText, spoken, `Partial match detected: ${partialMatches.map(m => m.intent).join(', ')}`);
+      return;
+    }
+  }
 
   if(parsed.intent === 'transfer' || parsed.intent === 'pay_bill'){
     const initialTask = createOrMergePendingTask(null, rawText);
