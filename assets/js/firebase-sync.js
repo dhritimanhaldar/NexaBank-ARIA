@@ -154,15 +154,27 @@ function applyRemoteSnapshot(data) {
   if (typeof renderLog === 'function') renderLog();
 }
 
-// Debounced publisher — batches rapid addLog() calls into one Firestore
-// write every 300 ms so the supervisor sees updates in near real-time
-// without flooding Firestore with one write per character.
-function scheduledPublish(payload = {}, delay = 0) {
+// Builds the complete state snapshot the supervisor needs to mirror the customer UI.
+function buildFullSnapshot(extra = {}) {
+  return Object.assign({
+    accounts:     S.accounts,
+    transactions: S.transactions  || [],
+    logEntries:   S.logEntries    || [],
+    txSeq:        S.txSeq         || 0,
+    totalDebit:   S.totalDebit    || 0,
+    statusLabel:  (typeof DOM !== 'undefined' && DOM.statusLabel)
+                    ? DOM.statusLabel.textContent : ''
+  }, extra || {});
+}
+
+// Debounced publisher — batches rapid addLog() calls into one write every
+// 300 ms. Always ships the full state so the supervisor gets a complete picture.
+function scheduledPublish(extra = {}, delay = 0) {
   if (_publishTimer) clearTimeout(_publishTimer);
   _publishTimer = setTimeout(function() {
     _publishTimer = null;
-    if (!canUseFirebaseSync() && S.role !== 'customer') return;
-    publishLiveSnapshot(payload);
+    if (S.role !== 'customer') return;   // only the customer publishes state
+    publishLiveSnapshot(buildFullSnapshot(extra));
   }, delay || 300);
 }
 
@@ -405,6 +417,19 @@ function syncRoleGateStatus(){
 }
 
 async function publishLiveSnapshot(payload = {}) {
+  // Only the customer tab should ever publish state — supervisor is read-only.
+  if (S.role && S.role !== 'customer') return false;
+
+  // ── Same-device tab sync (zero latency via BroadcastChannel) ────────────
+  // Post BEFORE the Firestore await so the supervisor tab updates instantly
+  // when both tabs are on the same device.
+  try {
+    const bc = getLocalChannel();
+    if (bc) bc.postMessage({ type: 'nexabank_snapshot', payload });
+  } catch (bcErr) {
+    console.warn('[NexaBank] BroadcastChannel post failed:', bcErr);
+  }
+
   if (!canUseFirebaseSync()) return false;
 
   try {
@@ -436,6 +461,7 @@ if (typeof window !== 'undefined') {
   window.initFirebaseSync = initFirebaseSync;
   window.publishLiveSnapshot = publishLiveSnapshot;
   window.scheduledPublish = scheduledPublish;
+  window.buildFullSnapshot = buildFullSnapshot;
   window.startSessionHeartbeat = startSessionHeartbeat;
   window.stopSessionHeartbeat = stopSessionHeartbeat;
   window.acquireCustomerLock = acquireCustomerLock;

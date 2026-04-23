@@ -48,7 +48,8 @@ async function enterAsCustomer(){
     if(micBtn) micBtn.disabled = false;
     if(typeof addLog === 'function') addLog('system','SYSTEM','Entered customer mode. Voice and manual input enabled.');
     if(typeof initMic === 'function') initMic();
-    startSessionHeartbeat(() => ({
+    // Heartbeat carries the full snapshot so supervisor always has current state.
+    startSessionHeartbeat(() => buildFullSnapshot({
       role: 'customer',
       mode: 'live'
     }));
@@ -78,10 +79,7 @@ async function enterAsSupervisor(){
     if(micBtn) micBtn.disabled = true;
     if(typeof addLog === 'function') addLog('system','SYSTEM','Entered supervisor mode. View-only access.');
     if(typeof subscribeToRemoteSession === 'function') subscribeToRemoteSession();
-    startSessionHeartbeat(() => ({
-      role: 'supervisor',
-      mode: 'live'
-    }));
+    // Supervisor is read-only — no heartbeat publish needed.
   }catch(err){
     console.warn('enterAsSupervisor failed:', err);
   }

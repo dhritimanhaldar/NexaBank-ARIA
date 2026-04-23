@@ -89,14 +89,15 @@ function setStatus(type,label){
   DOM.statusLabel.textContent=label;
   const stateMap={live:'● READY',listening:'◉ LISTENING',thinking:'◈ THINKING',speaking:'◎ SPEAKING',muted:'✕ MUTED'};
   DOM.ariaState.textContent=stateMap[type]||'● READY';
-  if (S.role === 'customer' && typeof publishLiveSnapshot === 'function') {
+  if (S.role === 'customer' && typeof scheduledPublish === 'function') {
     try {
-      const syncPayload = {
+      // Use scheduledPublish so buildFullSnapshot() wraps the payload —
+      // supervisor receives logEntries, accounts, transactions etc. on every update.
+      scheduledPublish({
         status: typeof type === 'string' ? type : null,
         listening: !!(type === 'listening'),
         updatedFrom: 'voice-ui'
-      };
-      publishLiveSnapshot(syncPayload);
+      }, 0);
     } catch (err) {
       console.warn('[voice-ui] status sync skipped', err);
     }
