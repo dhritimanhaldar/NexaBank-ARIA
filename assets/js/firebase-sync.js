@@ -236,6 +236,10 @@ async function initFirebaseSync(){
 async function acquireCustomerLock(customerId = 'customer') {
   if (!canUseFirebaseSync()) return false;
 
+  // A lock older than this is considered stale (session crashed without releasing).
+  // Must be well above the heartbeat interval (5s) so a live session is never evicted.
+  const STALE_LOCK_MS = 30000;
+
   try {
     const safeCustomerId = typeof customerId === 'string' && customerId.trim()
       ? customerId.trim()
@@ -248,7 +252,15 @@ async function acquireCustomerLock(customerId = 'customer') {
       const data = snap.exists ? snap.data() : null;
 
       if (data?.locked === true) {
-        throw new Error('customer-lock-already-held');
+        // Check if the lock is stale (previous session crashed without releasing).
+        const lockedAtMs = data.updatedAt?.toMillis?.() ?? 0;
+        const isStale = lockedAtMs === 0 || (Date.now() - lockedAtMs) > STALE_LOCK_MS;
+
+        if (!isStale) {
+          throw new Error('customer-lock-already-held');
+        }
+
+        logSyncWarn(`Stale customer lock detected (age: ${Date.now() - lockedAtMs}ms) — overwriting`);
       }
 
       transaction.set(lockRef, sanitizeFirestorePayload({
@@ -263,7 +275,7 @@ async function acquireCustomerLock(customerId = 'customer') {
     return true;
   } catch (err) {
     if (err?.message === 'customer-lock-already-held') {
-      logSyncWarn('Customer lock already held');
+      logSyncWarn('Customer lock already held by an active session');
       return false;
     }
 
