@@ -29,8 +29,8 @@ async function enterAsCustomer(customerId){
     S.customerProfile = CUSTOMER_PROFILES[customerId];
     S.customerId = customerId;
     S.accounts = {
-      savings: Number(S.customerProfile?.savings || 0),
-      current: Number(S.customerProfile?.current || 0)
+            savings: Number(S.customerProfile.savings),
+      current: Number(S.customerProfile.current)
     };
     S.totalDebit = 0;
     S.txSeq = 0;
@@ -39,6 +39,19 @@ async function enterAsCustomer(customerId){
     S.pendingTask = null;
     S.pendingTransaction = null;
     S.pendingClarification = null;
+
+    // ── Update balance and account number DOM immediately ─────────
+    const fmt2 = n => '₹ ' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    const savBal = document.getElementById('savingsBal');
+    const curBal = document.getElementById('currentBal');
+    const savNum = document.getElementById('savingsAccNum');
+    const curNum = document.getElementById('currentAccNum');
+    if(savBal) savBal.textContent = fmt2(S.accounts.savings);
+    if(curBal) curBal.textContent = fmt2(S.accounts.current);
+    if(savNum) savNum.textContent = '•••• •••• ' + S.customerProfile.savingsAccNum;
+    if(curNum) curNum.textContent = '•••• •••• ' + S.customerProfile.currentAccNum;
+    
+    
     if (typeof document !== 'undefined') {
       const sessionIdEl = document.getElementById('sessionId');
       if (sessionIdEl && S.sessionId) sessionIdEl.textContent = S.sessionId;
@@ -104,6 +117,12 @@ async function enterAsSupervisor(){
     document.body.classList.add('supervisor-mode');
     const roleGate = document.getElementById('roleGate');
     if(roleGate) roleGate.style.display = 'none';
+
+    // Show the supervisor two-column panel and hide the normal customer layout
+    const supervisorView = document.getElementById('supervisorView');
+    if(supervisorView) supervisorView.style.display = 'grid';
+    const mainBody = document.querySelector('.body');
+    if(mainBody) mainBody.style.gridTemplateColumns = '1fr';
     updateRoleBadge();
     setLiveModeBadge(S.firebaseAvailable ? 'LIVE' : 'LOCAL');
     const manualInput = document.getElementById('manualInput');
@@ -140,12 +159,14 @@ function setLiveModeBadge(mode){
 }
 
 window.refreshRoleGateButtons = refreshRoleGateButtons;
+window.bootRoleGate = refreshRoleGateButtons;   // backward-compat alias
 window.enterAsCustomer = enterAsCustomer;
 window.enterAsSupervisor = enterAsSupervisor;
 window.updateRoleBadge = updateRoleBadge;
 window.setLiveModeBadge = setLiveModeBadge;
 
 if (typeof window !== 'undefined') {
+  window.bootRoleGate = refreshRoleGateButtons;
   window.refreshRoleGateButtons = refreshRoleGateButtons;
   window.enterAsCustomer = enterAsCustomer;
   window.enterAsSupervisor = enterAsSupervisor;

@@ -5,6 +5,7 @@ if(typeof sendManual === 'undefined') console.error('sendManual not found on win
 if(typeof runHint === 'undefined') console.error('runHint not found on window');
 if(typeof clearLog === 'undefined') console.error('clearLog not found on window');
 if(typeof enterAsCustomer === 'undefined') console.error('enterAsCustomer not found on window');
+if(typeof bootRoleGate === 'undefined') console.warn('[globals] bootRoleGate not yet registered — will be set by role-gate.js');
 if(typeof enterAsSupervisor === 'undefined') console.error('enterAsSupervisor not found on window');
 window.NexaBankGlobals = window.NexaBankGlobals || {};
 
@@ -13,6 +14,15 @@ window.NexaBankGlobals.refreshRoleGateButtons = function (...args) {
     return window.refreshRoleGateButtons(...args);
   }
   console.warn('refreshRoleGateButtons not found on window');
+  return Promise.resolve(false);
+};
+
+// bootRoleGate is the old name — proxy it to refreshRoleGateButtons
+window.NexaBankGlobals.bootRoleGate = function (...args) {
+  if (typeof window.refreshRoleGateButtons === 'function') {
+    return window.refreshRoleGateButtons(...args);
+  }
+  console.warn('bootRoleGate / refreshRoleGateButtons not found on window');
   return Promise.resolve(false);
 };
 
