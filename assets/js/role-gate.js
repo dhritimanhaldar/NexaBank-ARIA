@@ -172,8 +172,7 @@ async function enterAsSupervisor(){
     if (!syncReady) {
       console.warn('[role-gate] Firebase sync unavailable, continuing in local-only mode');
     }
-    S.role = 'supervisor';
-    S.isSupervisorView = true;
+    S.role = 'supervisor';       S.isSupervisorView = true;       await acquireCustomerLock('supervisor').catch(() => false);
     document.body.classList.add('supervisor-mode');
     const roleGate = document.getElementById('roleGate');
     if(roleGate) roleGate.style.display = 'none';
