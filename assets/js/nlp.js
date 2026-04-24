@@ -120,7 +120,7 @@ const NLP = {
     if(/\b(sorry|i am sorry|i'm sorry|apologies|my apologies)\b/.test(t)) return { intent:'apology' };
     if(/\b(please|excuse me|pardon me|kindly)\b/.test(t) && t.split(/\s+/).length <= 4) return { intent:'courtesy' };
     if(/\b(good morning|good afternoon|good evening)\b/.test(t)) return { intent:'greeting_time' };
-    if(/\b(bye|goodbye|see you|talk to you later|catch you later)\b/.test(t)) return { intent:'farewell' };
+    if(/\b(end session|end the session|end my session|hang up|i am done|i'm done|i am done for today|i'm done for today|nothing else for now|no thank you i am done|no thanks i am done|that's all for now|that is all for now|all done|close session|terminate session|stop the session|i don't need anything else|i do not need anything else|goodbye for now|done for today|close the banking session|end banking session)\b/i.test(t)) return { intent:'end_session' }; if(/\b(bye|goodbye|see you|talk to you later|catch you later)\b/.test(t)) return { intent:'farewell' };
 
     if(/\b(can you|could you|are you able to|do you support|do you handle)\b/.test(t))
       return { intent:'capability_check', task:text };
