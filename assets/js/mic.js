@@ -347,7 +347,7 @@ function runHint(t){
   processInput(t);
 }
 
-function speak(text){
+function speak(text), onEndCallback{
   if(S.role === 'supervisor') return;
   if(!window.speechSynthesis){
     scheduleAutoListen();
@@ -379,6 +379,7 @@ function speak(text){
     updateMicBtn();
     // Wait 1 second then auto-listen (gives speaker output time to fade)
     if(!S.isMuted&&!S.isThinking) scheduleAutoListen(1000);
+            if(typeof onEndCallback === 'function') onEndCallback();
   };
 
   u.onerror=(e)=>{
@@ -390,6 +391,7 @@ function speak(text){
     setStatus('live','READY');
     updateMicBtn();
     if(!S.isMuted&&!S.isThinking) scheduleAutoListen(1000);
+            if(typeof onEndCallback === 'function') onEndCallback();
   };
 
   // Workaround: Chrome sometimes doesn't fire onend; poll as fallback
@@ -403,6 +405,7 @@ function speak(text){
       setStatus('live','READY');
       updateMicBtn();
       if(!S.isMuted&&!S.isThinking) scheduleAutoListen(1000);
+                  if(typeof onEndCallback === 'function') onEndCallback();
     }
   },estimatedMs+2000);
 
