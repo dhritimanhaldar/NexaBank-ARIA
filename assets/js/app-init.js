@@ -71,20 +71,16 @@ function startSupervisorFlow() {
   if(typeof hideMicPermissionPrompt === 'function'){
     hideMicPermissionPrompt();
   }
-
   if(typeof addLog === 'function' && window.S){
-    addLog('system','SYSTEM',`HSBC Global Banking Assistant · ARIA v3.0 · Session ${S.sessionId} · Hands-free voice mode`);
+    addLog('system','SYSTEM',`HSBC Global Banking Assistant \u00b7 ARIA v3.0 \u00b7 Session ${S.sessionId} \u00b7 Hands-free voice mode`);
     addLog('system','SYSTEM','Choose a role to enter the live HSBC session. Customer mode uses your microphone; supervisor mode is view-only.');
   }
-
   if(typeof drawFlat === 'function'){
     drawFlat();
   }
-
   if(typeof updateMicBtn === 'function'){
     updateMicBtn();
   }
-
   await Promise.resolve(
     window.NexaBankGlobals?.refreshRoleGateButtons
       ? window.NexaBankGlobals.refreshRoleGateButtons()
@@ -102,25 +98,58 @@ function startSupervisorFlow() {
     customer1RoleButton.addEventListener('click', () => handleRoleSelection('customer1'));
     customer1RoleButton.dataset.bound = 'true';
   }
-
   if (customer2RoleButton && !customer2RoleButton.dataset.bound) {
     customer2RoleButton.addEventListener('click', () => handleRoleSelection('customer2'));
     customer2RoleButton.dataset.bound = 'true';
   }
-
   if (supervisorRoleButton && !supervisorRoleButton.dataset.bound) {
     supervisorRoleButton.addEventListener('click', () => handleRoleSelection('supervisor'));
     supervisorRoleButton.dataset.bound = 'true';
   }
-
   if (allowMicButton && !allowMicButton.dataset.bound) {
     allowMicButton.addEventListener('click', handleMicPermissionClick);
     allowMicButton.dataset.bound = 'true';
   }
 
   window.addEventListener('beforeunload', () => {
-    if(window.S && S.role === 'customer' && typeof releaseCustomerLock === 'function'){
-      releaseCustomerLock(S.customerId);
+    if(window.S && S.role === 'customer') {
+      // Publish offline snapshot so supervisor sees OFFLINE immediately
+      if (typeof publishLiveSnapshot === 'function') {
+        publishLiveSnapshot({ heartbeatAt: 1 });
+      }
+      if (typeof releaseCustomerLock === 'function'){
+        releaseCustomerLock(S.customerId);
+      }
+    }
+    if(window.S && S.role === 'supervisor') {
+      if (typeof releaseCustomerLock === 'function'){
+        releaseCustomerLock('supervisor');
+      }
     }
   });
-})(); function endSession(){   if(S.sessionEnded) return;   S.sessionEnded = true;   if(window.speechSynthesis) window.speechSynthesis.cancel();   if(typeof cancelSpeech === 'function') cancelSpeech();   if(typeof stopListening === 'function') stopListening(true);   if(typeof setListeningUi === 'function') setListeningUi(false, 'Session ended');   if(typeof stopSessionHeartbeat === 'function') stopSessionHeartbeat();   if(S.role === 'customer' && typeof releaseCustomerLock === 'function') releaseCustomerLock(S.customerId);   if(typeof setStatus === 'function') setStatus('ended','SESSION ENDED');   const btn = document.getElementById('endSessionBtn');   if(btn){ btn.disabled = true; btn.textContent = '✓ Session Ended'; }   const mi = document.getElementById('manualInput');   if(mi) mi.disabled = true;   const sb = document.querySelector('.send-btn');   if(sb) sb.disabled = true;   if(typeof addLog === 'function') addLog('system','SYSTEM','Session ended. Refresh the page to start a new session.');   if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();   console.log('[NexaBank] Session ended by user.'); } window.endSession = endSession;
+})();
+
+function endSession(){
+  if(S.sessionEnded) return;
+  S.sessionEnded = true;
+  if(window.speechSynthesis) window.speechSynthesis.cancel();
+  if(typeof cancelSpeech === 'function') cancelSpeech();
+  if(typeof stopListening === 'function') stopListening(true);
+  if(typeof setListeningUi === 'function') setListeningUi(false, 'Session ended');
+  if(typeof stopSessionHeartbeat === 'function') stopSessionHeartbeat();
+  // Publish offline snapshot BEFORE releasing the lock so supervisor sees OFFLINE
+  if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') {
+    publishLiveSnapshot({ heartbeatAt: 1 });
+  }
+  if(S.role === 'customer' && typeof releaseCustomerLock === 'function') releaseCustomerLock(S.customerId);
+  if(typeof setStatus === 'function') setStatus('ended','SESSION ENDED');
+  const btn = document.getElementById('endSessionBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '\u2713 Session Ended'; }
+  const mi = document.getElementById('manualInput');
+  if(mi) mi.disabled = true;
+  const sb = document.querySelector('.send-btn');
+  if(sb) sb.disabled = true;
+  if(typeof addLog === 'function') addLog('system','SYSTEM','Session ended. Refresh the page to start a new session.');
+  console.log('[NexaBank] Session ended by user.');
+}
+window.endSession = endSession;
