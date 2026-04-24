@@ -302,7 +302,7 @@ async function acquireCustomerLock(customerId = 'customer') {
 
     await runTransaction(firestoreDb, async (transaction) => {
       const snap = await transaction.get(lockRef);
-      const data = snap.exists() ? snap.data() : null;
+      const data = snap.exists ? snap.data() : null;
 
       if (data?.locked === true) {
         // Check if the lock is stale (previous session crashed without releasing).
@@ -379,7 +379,7 @@ async function getCustomerLockStatus(customerId) {
     const safeId = typeof customerId === 'string' && customerId.trim() ? customerId.trim() : 'customer1';
     const lockRef = doc(firestoreDb, 'channels', safeId, 'locks', safeId);
     const snap = await getDoc(lockRef);
-    if (!snap.exists()) return { locked: false, stale: false };
+        if (!snap.exists) return { locked: false, stale: false };
     const data = snap.data();
     if (!data || data.locked !== true) return { locked: false, stale: false };
 
@@ -458,7 +458,7 @@ function subscribeToRemoteSession(){
     ['customer1','customer2'].forEach(function(customerId){
       const docRef = firestoreDb.collection('channels').doc(customerId).collection('meta').doc('state');
       const unsubscribe = docRef.onSnapshot(function(docSnap) {
-        const data = docSnap.exists() ? docSnap.data() : null;
+                const data = docSnap.exists ? docSnap.data() : null;
         if(!data || S.suppressLocalSideEffects) return;
         applyCustomerSnapshot(customerId, data);
       }, function(err) {
