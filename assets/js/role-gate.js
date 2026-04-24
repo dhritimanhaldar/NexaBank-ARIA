@@ -46,7 +46,7 @@ async function _updateRoleButtonAvailability() {
     if (supLocked) parts.push('Supervisor: Active');
     if (statusEl) {
       statusEl.textContent = parts.length
-        ? parts.join(' · ') + ' — other slots available.'
+        ? parts.join(' · ') + (parts.length === 3 ? ' — all sessions occupied.' : ' — other slots available.')
         : 'All modes available.';
     }
   } catch (err) {
