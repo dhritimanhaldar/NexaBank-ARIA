@@ -65,3 +65,6 @@ table.ledger td{padding:9px 10px;font-size:11px;color:var(--color-text-muted);bo
 table.ledger tr{transition:background .15s}
 table.ledger tr:hover td{background:var(--color-surface-alt)}
 .empty-ledger{padding:40px 20px;text-align:center;color:var(--color-text-soft);font-size:11px;letter-spacing:.06em;line-height:2}
+
+.sup-log-header{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--color-border);flex-shrink:0}
+.perm-btn:disabled,.perm-btn[disabled]{opacity:.4;cursor:not-allowed;pointer-events:none}
