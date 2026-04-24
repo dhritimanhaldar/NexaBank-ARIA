@@ -410,7 +410,7 @@ async function getCustomerLockStatus(customerId) {
     if (!data || data.locked !== true) return { locked: false, stale: false };
 
     const lockedAtMs = data.updatedAt?.toMillis?.() ?? 0;
-    const isStale = lockedAtMs === 0 || (Date.now() - lockedAtMs) > STALE_LOCK_MS;
+    const lockStale = lockedAtMs === 0 || (Date.now() - lockedAtMs) > STALE_LOCK_MS;         let heartbeatLive = false;         try {           const stateRef = doc(firestoreDb, 'channels', safeId, 'meta', 'state');           const stateSnap = await getDoc(stateRef);           if (stateSnap.exists) {             const hb = stateSnap.data()?.heartbeatAt || 0;             heartbeatLive = hb > 0 && (Date.now() - hb) < STALE_LOCK_MS;           }         } catch (_) {}         const isStale = lockStale && !heartbeatLive;
     return { locked: !isStale, stale: isStale };
   } catch (err) {
     logSyncWarn('getCustomerLockStatus error', err);
@@ -441,7 +441,7 @@ function startSessionHeartbeat(buildPayload) {
   }, 5000);
 }
 
-function stopSessionHeartbeat() {
+function refreshCustomerLockTimestamp(roleId) {   if (!canUseFirebaseSync() || !firestoreDb || !roleId) return;   try {     const safeId = String(roleId).trim();     const lockRef = doc(firestoreDb, 'channels', safeId, 'locks', safeId);     lockRef.update({ updatedAt: serverTimestamp() }).catch(() => {});   } catch (e) {} } function stopSessionHeartbeat() {
   if (heartbeatIntervalId) {
     clearInterval(heartbeatIntervalId);
     heartbeatIntervalId = null;
@@ -599,5 +599,5 @@ if (typeof window !== 'undefined') {
   window.syncRoleGateStatus = syncRoleGateStatus;
   window.getCustomerLockStatus = getCustomerLockStatus;
   window.applyCustomerSnapshot = applyCustomerSnapshot;
-    window.clearCustomerLog = clearCustomerLog;
+    window.clearCustomerLog = clearCustomerLog;   window.refreshCustomerLockTimestamp = refreshCustomerLockTimestamp;   // ── Release lock on tab close / navigation ──────────────────────   function _releaseActiveSessionLock() {     const roleId = window.S && (S.customerId || S.role);     if (roleId && typeof releaseCustomerLock === 'function') {       releaseCustomerLock(roleId).catch(() => {});     }   }   window.addEventListener('beforeunload', _releaseActiveSessionLock);   document.addEventListener('visibilitychange', function() {     if (document.visibilityState === 'hidden') _releaseActiveSessionLock();   });
 }
