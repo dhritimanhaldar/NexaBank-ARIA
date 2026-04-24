@@ -65,3 +65,22 @@ table.ledger td{padding:9px 10px;font-size:11px;color:var(--color-text-muted);bo
 table.ledger tr{transition:background .15s}
 table.ledger tr:hover td{background:var(--color-surface-alt)}
 .empty-ledger{padding:40px 20px;text-align:center;color:var(--color-text-soft);font-size:11px;letter-spacing:.06em;line-height:2}
+
+.sup-log-header{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--color-border);flex-shrink:0}
+.perm-btn:disabled,.perm-btn[disabled]{opacity:.4;cursor:not-allowed;pointer-events:none}
+
+.sup-ledger-header{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-top:1px solid var(--color-border);background:var(--color-surface-alt);flex-shrink:0}
+.sup-ledger-wrap{display:flex;flex-direction:column;border-top:2px solid var(--color-border);margin-top:8px}
+#endSessionBtn{background:var(--color-danger,#c0392b);color:#fff;border-color:var(--color-danger,#c0392b);margin-left:8px}
+#endSessionBtn:hover{opacity:.85}
+#endSessionBtn:disabled{opacity:.5;cursor:not-allowed}
+
+
+/* ── Supervisor column: logs + ledger side-by-side ─────────────────── */
+.supervisor-column{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto 1fr;gap:0 12px}
+.supervisor-column>h3{grid-column:1/-1}
+.supervisor-column>.sup-balances{grid-column:1/-1}
+.supervisor-column>.sup-log-header{grid-column:1;align-self:start}
+.supervisor-column>.sup-log{grid-column:1;grid-row:4;overflow-y:auto;min-height:160px}
+.supervisor-column>.sup-ledger{grid-column:2;grid-row:3/5;overflow-y:auto}
+.supervisor-column>.sup-ledger::before{content:'Transaction Ledger';display:block;font-size:9px;letter-spacing:.14em;color:var(--color-text-soft);text-transform:uppercase;padding:6px 12px;border-bottom:1px solid var(--color-border);flex-shrink:0}

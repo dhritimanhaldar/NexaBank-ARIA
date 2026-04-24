@@ -1,5 +1,5 @@
-const SILENCE_TIMEOUT_MS = 2000;
-const MAX_LISTEN_MS = 10000;
+const SILENCE_TIMEOUT_MS = 5000;
+const MAX_LISTEN_MS = 120000;
 const MIN_TRANSCRIPT_LENGTH = 2;
 
 function hasMeaningfulTranscript(text) {
@@ -166,7 +166,7 @@ function startListening(){
     const display = (S.pendingFinal+' '+interim).trim();
     if(display) DOM.transcriptText.textContent = display;
 
-    if(hasMeaningfulTranscript(cleanedTranscript)){
+    if((cleanedTranscript + interim).trim().length > 0){
       appState.hasDetectedSpeech = true;
       S.vadSpeechDetected=true;
       S.vadSilenceStart=null;

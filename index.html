@@ -101,7 +101,7 @@
       <button class="mic-btn" id="micBtn" onclick="toggleMute()">
         <span id="micIcon">MIC</span><span id="micLabel">Initializing mic…</span>
       </button>
-      <button class="log-btn" id="resetBtn" onclick="resetSession()" style="margin-top:6px;width:100%;font-size:10px;letter-spacing:.08em;" title="Clear all pending state and restart listening">↺ RESET SESSION</button>
+      <button class="log-btn" id="resetBtn" onclick="resetSession()" style="margin-top:6px;width:100%;font-size:10px;letter-spacing:.08em;" title="Clear all pending state and restart listening">↺ RESET SESSION</button><button id="endSessionBtn" class="log-btn" onclick="endSession()" title="End this banking session and turn off microphone">⏹ END SESSION</button></button>
     </div>
 
     <div class="tbox">
@@ -194,7 +194,7 @@
         <div>Savings: ₹0.00</div>
         <div>Current: ₹0.00</div>
       </div>
-      <div class="sup-log" id="sup1Log"></div>
+      <div class="sup-log-header"><span>Interaction Log</span><button class="log-btn" onclick="clearCustomerLog('customer1')">CLEAR CHAT</button></div><div class="sup-log" id="sup1Log"></div><div class="sup-ledger-wrap"><div class="sup-ledger-header"><span>Transaction Ledger</span></div><div class="empty-ledger" id="sup1EmptyLedger">No transactions yet.</div><div class="ledger-table-wrap" id="sup1LedgerTable" style="display:none"><table class="ledger"><thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead><tbody id="sup1LedgerBody"></tbody></table></div></div>
       <div class="sup-ledger">
         <div class="empty-ledger" id="sup1EmptyLedger">No actions yet.<br/>Waiting for customer activity.</div>
         <table class="ledger" id="sup1LedgerTable" style="display:none">
@@ -209,7 +209,7 @@
         <div>Savings: ₹0.00</div>
         <div>Current: ₹0.00</div>
       </div>
-      <div class="sup-log" id="sup2Log"></div>
+      <div class="sup-log-header"><span>Interaction Log</span><button class="log-btn" onclick="clearCustomerLog('customer2')">CLEAR CHAT</button></div><div class="sup-log" id="sup2Log"></div><div class="sup-ledger-wrap"><div class="sup-ledger-header"><span>Transaction Ledger</span></div><div class="empty-ledger" id="sup2EmptyLedger">No transactions yet.</div><div class="ledger-table-wrap" id="sup2LedgerTable" style="display:none"><table class="ledger"><thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead><tbody id="sup2LedgerBody"></tbody></table></div></div>
       <div class="sup-ledger">
         <div class="empty-ledger" id="sup2EmptyLedger">No actions yet.<br/>Waiting for customer activity.</div>
         <table class="ledger" id="sup2LedgerTable" style="display:none">

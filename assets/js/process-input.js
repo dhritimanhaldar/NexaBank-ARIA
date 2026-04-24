@@ -242,7 +242,7 @@ function processInput(text){
   const rawText = String(text || '').trim();
   if(!rawText) return;
 
-  if(/\b(my pin is|my password is|secure key is|my code is|my secret is)\b|\b\d{6,8}\b/.test(rawText.toLowerCase())) return;
+  if(/\b(my pin is|my password is|secure key is|my code is|my secret is)\b|\b\d{6,8}\b/.test(rawText.toLowerCase())) return;   const parsed0 = NLP.classify(rawText);   if(parsed0.intent === 'end_session'){     addLog('user','You',rawText);     const spoken = 'Of course. Thank you for banking with HSBC. Have a great day! Ending your session now.';     addLog('aria','ARIA',spoken);     if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();     speak(spoken, function(){ if(typeof endSession === 'function') endSession(); });     return;   }
 
   const fmt = n => '₹ ' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2 });
 
