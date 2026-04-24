@@ -8,6 +8,8 @@ let firebaseSyncInitialized = false;
 let firebaseSyncDisabledReason = '';
 let heartbeatIntervalId = null;
 const STALE_LOCK_MS = 30000;
+// Tracks previous online/offline state per customer for supervisor status log entries
+const _customerOnlineState = {};
 
 function logSyncInfo(message, extra) {
   if (typeof extra !== 'undefined') {
@@ -147,6 +149,30 @@ function applyCustomerSnapshot(customerId, data) {
     const isOnline = lastBeat && (Date.now() - lastBeat) < 15000;
     statusEl.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
     statusEl.className = 'sup-status ' + (isOnline ? 'online' : 'offline');
+  }
+    // ── Online / offline state change detection ───────────────────────
+  {
+    const lastBeat = data.heartbeatAt || 0;
+    const isNowOnline = !!(lastBeat && (Date.now() - lastBeat) < 15000);
+    const wasOnline = _customerOnlineState[customerId];
+    if (typeof wasOnline === 'boolean' && wasOnline !== isNowOnline) {
+      // State changed — inject a system log entry into the supervisor log panel
+      const ts = new Date().toLocaleTimeString('en-IN', { hour12: false });
+      if (logEl) {
+        const div = document.createElement('div');
+        div.className = 'entry system sup-status-change ' + (isNowOnline ? 'online-event' : 'offline-event');
+        div.innerHTML =
+          '<span class="who">' + (isNowOnline ? '●' : '○') + '</span>' +
+          '<span class="who">SYSTEM</span> ' +
+          '<span class="time">' + ts + '</span>' +
+          '<span class="msg">' +
+          (isNowOnline ? '✓ Customer came online' : '✕ Customer went offline') +
+          '</span>';
+        logEl.appendChild(div);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+    }
+    _customerOnlineState[customerId] = isNowOnline;
   }
 
   // ── Balances ────────────────────────────────────────────────────
@@ -542,6 +568,23 @@ async function publishLiveSnapshot(payload = {}) {
   }
 }
 
+// Clear all log entries from a supervisor customer column.
+// Clears in-memory display only — does not delete Firestore data.
+function clearCustomerLog(customerId) {
+  const isC1 = customerId === 'customer1';
+  const logEl  = document.getElementById(isC1 ? 'sup1Log'  : 'sup2Log');
+  const bodyEl = document.getElementById(isC1 ? 'sup1LedgerBody' : 'sup2LedgerBody');
+  const tableEl  = document.getElementById(isC1 ? 'sup1LedgerTable'  : 'sup2LedgerTable');
+  const emptyEl  = document.getElementById(isC1 ? 'sup1EmptyLedger'  : 'sup2EmptyLedger');
+  if (logEl) logEl.innerHTML = '';
+  if (bodyEl) bodyEl.innerHTML = '';
+  if (tableEl) tableEl.style.display = 'none';
+  if (emptyEl) { emptyEl.style.display = ''; emptyEl.textContent = 'Log cleared.'; }
+  // Reset the tracked online state so the next heartbeat re-appends a status line
+  delete _customerOnlineState[customerId];
+  logSyncInfo('clearCustomerLog: cleared display for ' + customerId);
+}
+
 if (typeof window !== 'undefined') {
   window.initFirebaseSync = initFirebaseSync;
   window.publishLiveSnapshot = publishLiveSnapshot;
@@ -556,4 +599,5 @@ if (typeof window !== 'undefined') {
   window.syncRoleGateStatus = syncRoleGateStatus;
   window.getCustomerLockStatus = getCustomerLockStatus;
   window.applyCustomerSnapshot = applyCustomerSnapshot;
+    window.clearCustomerLog = clearCustomerLog;
 }
