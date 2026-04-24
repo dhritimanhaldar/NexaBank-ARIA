@@ -599,5 +599,5 @@ if (typeof window !== 'undefined') {
   window.syncRoleGateStatus = syncRoleGateStatus;
   window.getCustomerLockStatus = getCustomerLockStatus;
   window.applyCustomerSnapshot = applyCustomerSnapshot;
-    window.clearCustomerLog = clearCustomerLog;   window.refreshCustomerLockTimestamp = refreshCustomerLockTimestamp;   // ── Release lock on tab close / navigation ──────────────────────   function _releaseActiveSessionLock() {     const roleId = window.S && (S.customerId || S.role);     if (roleId && typeof releaseCustomerLock === 'function') {       releaseCustomerLock(roleId).catch(() => {});     }   }   window.addEventListener('beforeunload', _releaseActiveSessionLock);   document.addEventListener('visibilitychange', function() {     if (document.visibilityState === 'hidden') _releaseActiveSessionLock();   });
+    window.clearCustomerLog = clearCustomerLog;   window.refreshCustomerLockTimestamp = refreshCustomerLockTimestamp;   // ── Release lock on tab close / navigation ──────────────────────   function _releaseActiveSessionLock() {     const roleId = window.S && (S.customerId || S.role);     if (roleId && typeof releaseCustomerLock === 'function') {       releaseCustomerLock(roleId).catch(() => {});     }   }   window.addEventListener('beforeunload', _releaseActiveSessionLock);
 }
