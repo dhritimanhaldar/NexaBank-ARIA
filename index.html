@@ -1,243 +1,248 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>HSBC · ARIA — Global Banking Assistant</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23db0011'/%3E%3Ctext x='50%25' y='56%25' font-size='30' text-anchor='middle' fill='white' font-family='Arial'%3EA%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="assets/css/variables.css">
-<link rel="stylesheet" href="assets/css/base.css">
-<link rel="stylesheet" href="assets/css/layout.css">
-<link rel="stylesheet" href="assets/css/components.css">
-<link rel="stylesheet" href="assets/css/states.css">
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script><script>
-  window.NEXA_FIREBASE_CONFIG = {
-    apiKey: "AIzaSyBzD_qC2GStD36bovs341IULT69VVtTaPI",
-    authDomain: "nexabank-aria.firebaseapp.com",
-    projectId: "nexabank-aria",
-    storageBucket: "nexabank-aria.firebasestorage.app",
-    messagingSenderId: "280117994235",
-    appId: "1:280117994235:web:a79ad103534b200b6a865e"
-  };
-</script>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>HSBC · ARIA — Global Banking Assistant</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23db0011'/%3E%3Ctext x='50%25' y='56%25' font-size='30' text-anchor='middle' fill='white' font-family='Arial'%3EA%3C/text%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="assets/css/variables.css">
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/layout.css">
+    <link rel="stylesheet" href="assets/css/components.css">
+    <link rel="stylesheet" href="assets/css/states.css">
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script>
+        window.NEXA_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyBzD_qC2GStD36bovs341IULT69VVtTaPI",
+            authDomain: "nexabank-aria.firebaseapp.com",
+            projectId: "nexabank-aria",
+            storageBucket: "nexabank-aria.firebasestorage.app",
+            messagingSenderId: "280117994235",
+            appId: "1:280117994235:web:a79ad103534b200b6a865e"
+        };
+    </script>
 </head>
 <body>
-
-<div id="roleGate" class="role-gate">
-  <div class="role-gate-card">
-    <div class="role-gate-title">Welcome to HSBC</div>
-    <div class="role-gate-sub">Select how you want to enter this HSBC Global Banking session.</div>
-    <div class="role-gate-actions">
-      <button id="customer1Role" class="perm-btn">Enter as Customer 1</button>
-      <button id="customer2Role" class="perm-btn">Enter as Customer 2</button>
-      <button id="supervisorRole" class="log-btn">Enter as Supervisor</button>
-    </div>
-    <div id="roleGateStatus" class="role-gate-status">Checking live session availability…</div>
-  </div>
-</div>
-
-<!-- Microphone permission overlay (shown until mic is granted) -->
-<section class="perm-overlay" id="micPermissionScreen" hidden>
-  <div class="perm-box">
-    <div class="perm-icon">MIC</div>
-    <div class="perm-title">Enable Microphone</div>
-    <div class="perm-sub">ARIA needs one-time microphone access to listen to you hands-free. The mic stays open so you never have to click again.</div>
-    <button id="allowMicrophoneBtn" class="perm-btn">Allow Microphone</button>
-    <div class="perm-note">Secure local audio · No data leaves your browser</div>
-  </div>
-</section>
-
-<div class="shell">
-<div class="topbar">
-  <div class="brand">
-    <div class="brand-mark">HSBC</div>
-    <div>
-      <div class="brand-name">HSBC</div>
-      <div class="brand-sub">GLOBAL BANKING ASSISTANT · ARIA v3.0 · HANDS-FREE</div>
-    </div>
-  </div>
-  <div class="topbar-right">
-    <div class="local-badge">RUNS LOCALLY · NO API KEY</div>
-    <div class="pill"><div class="dot live" id="statusDot"></div><span id="statusLabel">READY</span></div>
-    <div class="pill"><span>ROLE</span><span id="roleBadge" style="color:var(--amber);margin-left:4px">UNSET</span></div>
-    <div class="pill"><span>LIVE MODE</span><span id="liveModeBadge" style="color:var(--text);margin-left:4px">LOCAL</span></div>
-    <div class="pill">SESSION <span id="sessionId" style="color:var(--text);margin-left:4px">—</span></div>
-    <div class="pill">TXN <span id="txnCount" style="color:var(--amber);margin-left:4px">0</span></div>
-  </div>
-</div>
-
-<div class="body">
-  <!-- LEFT AGENT PANEL -->
-  <div class="agent-col">
-    <div class="col-head">Agent Console</div>
-    <div class="aria-wrap">
-      <div class="aria-visual">
-        <div class="aria-orb-wrap">
-          <svg viewBox="0 0 64 64"><circle class="orb-base" cx="32" cy="32" r="31"/><circle class="orb-ring" id="ring1" cx="32" cy="32" r="27"/><circle class="orb-ring2" id="ring2" cx="32" cy="32" r="22"/></svg>
-          <div class="orb-face" id="orbFace">AI</div>
+    <div id="roleGate" class="role-gate">
+        <div class="role-gate-card">
+            <div class="role-gate-title">Welcome to HSBC</div>
+            <div class="role-gate-sub">Select how you want to enter this HSBC Global Banking session.</div>
+            <div class="role-gate-actions">
+                <button id="customer1Role" class="perm-btn">Enter as Customer 1</button>
+                <button id="customer2Role" class="perm-btn">Enter as Customer 2</button>
+                <button id="supervisorRole" class="log-btn">Enter as Supervisor</button>
+            </div>
+            <div id="roleGateStatus" class="role-gate-status">Checking live session availability…</div>
         </div>
-        <div>
-          <div class="aria-name">ARIA</div>
-          <div class="aria-title">HSBC Global Navigator</div>
-          <div class="aria-state" id="ariaState">● READY</div>
+    </div>
+
+    <!-- Microphone permission overlay (shown until mic is granted) -->
+    <section class="perm-overlay" id="micPermissionScreen" hidden>
+        <div class="perm-box">
+            <div class="perm-icon">MIC</div>
+            <div class="perm-title">Enable Microphone</div>
+            <div class="perm-sub">ARIA needs one-time microphone access to listen to you hands-free. The mic stays open so you never have to click again.</div>
+            <button id="allowMicrophoneBtn" class="perm-btn">Allow Microphone</button>
+            <div class="perm-note">Secure local audio · No data leaves your browser</div>
         </div>
-      </div>
+    </section>
+
+    <div class="shell">
+        <div class="topbar">
+            <div class="brand">
+                <div class="brand-mark">HSBC</div>
+                <div>
+                    <div class="brand-name">HSBC</div>
+                    <div class="brand-sub">GLOBAL BANKING ASSISTANT · ARIA v3.0 · HANDS-FREE</div>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="local-badge">RUNS LOCALLY · NO API KEY</div>
+                <div class="pill"><div class="dot live" id="statusDot"></div><span id="statusLabel">READY</span></div>
+                <div class="pill"><span>ROLE</span><span id="roleBadge" style="color:var(--amber);margin-left:4px">UNSET</span></div>
+                <div class="pill"><span>LIVE MODE</span><span id="liveModeBadge" style="color:var(--text);margin-left:4px">LOCAL</span></div>
+                <div class="pill">SESSION <span id="sessionId" style="color:var(--text);margin-left:4px">—</span></div>
+                <div class="pill">TXN <span id="txnCount" style="color:var(--amber);margin-left:4px">0</span></div>
+            </div>
+        </div>
+
+        <div class="body">
+            <!-- LEFT AGENT PANEL -->
+            <div class="agent-col">
+                <div class="col-head">Agent Console</div>
+                <div class="aria-wrap">
+                    <div class="aria-visual">
+                        <div class="aria-orb-wrap">
+                            <svg viewBox="0 0 64 64"><circle class="orb-base" cx="32" cy="32" r="31"/><circle class="orb-ring" id="ring1" cx="32" cy="32" r="27"/><circle class="orb-ring2" id="ring2" cx="32" cy="32" r="22"/></svg>
+                            <div class="orb-face" id="orbFace">AI</div>
+                        </div>
+                        <div>
+                            <div class="aria-name">ARIA</div>
+                            <div class="aria-title">HSBC Global Navigator</div>
+                            <div class="aria-state" id="ariaState">● READY</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Waveform — always on -->
+                <div class="wave-wrap">
+                    <canvas id="waveCanvas"></canvas>
+                    <span class="mic-always-on" id="micAlwaysOn">REC</span>
+                </div>
+                <!-- VAD silence countdown bar -->
+                <div class="vad-bar-wrap"><div class="vad-bar" id="vadBar"></div></div>
+                <!-- Mute / unmute button (replaces push-to-speak) -->
+                <div class="mic-wrap">
+                    <button class="mic-btn" id="micBtn" onclick="toggleMute()">
+                        <span id="micIcon">MIC</span><span id="micLabel">Initializing mic…</span>
+                    </button>
+                    <button class="log-btn" id="resetBtn" onclick="resetSession()" style="margin-top:6px;width:100%;font-size:10px;letter-spacing:.08em;" title="Clear all pending state and restart listening">↺ RESET SESSION</button>
+                    <button id="endSessionBtn" class="log-btn" onclick="endSession()" title="End this banking session and turn off microphone">⏹ END SESSION</button>
+                </div>
+                <div class="tbox">
+                    <div class="tlabel">You said</div>
+                    <div class="ttext" id="transcriptText">Waiting for input…</div>
+                </div>
+                <div class="manual-wrap">
+                    <input class="manual-input" id="manualInput" type="text" placeholder="Or type your request here…" onkeydown="if(event.key==='Enter')sendManual()"/>
+                    <button class="manual-send" onclick="sendManual()">SEND</button>
+                </div>
+                <div class="hints">
+                    <div class="hints-label">Quick commands — click to try</div>
+                    <span class="chip" onclick="runHint(this.textContent)">Transfer ₹5000 to Rahul</span>
+                    <span class="chip" onclick="runHint(this.textContent)">Pay electricity bill ₹1200</span>
+                    <span class="chip" onclick="runHint(this.textContent)">Check my savings balance</span>
+                    <span class="chip" onclick="runHint(this.textContent)">Block my debit card</span>
+                    <span class="chip" onclick="runHint(this.textContent)">Send last 3 months statement</span>
+                    <span class="chip" onclick="runHint(this.textContent)">Transfer ₹2000 from current to Priya</span>
+                </div>
+                <div class="accounts">
+                    <div class="col-head" style="padding:0 0 10px;border:none">Linked Accounts</div>
+                    <div class="acct-card" id="savingsCard">
+                        <div class="acct-type">Savings Account</div>
+                        <div class="acct-num" id="savingsAccNum">•••• •••• ••••</div>
+                        <div class="acct-bal green" id="savingsBal">₹ 1,24,500.00</div>
+                        <div class="acct-chg" id="savingsChg"></div>
+                    </div>
+                    <div class="acct-card" id="currentCard">
+                        <div class="acct-type">Current Account</div>
+                        <div class="acct-num" id="currentAccNum">•••• •••• ••••</div>
+                        <div class="acct-bal amber" id="currentBal">₹ 58,200.00</div>
+                        <div class="acct-chg" id="currentChg"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTER LOG -->
+            <div class="log-col">
+                <div class="log-head">
+                    <span class="log-title">Interaction Log</span>
+                    <div class="log-actions">
+                        <button class="log-btn" onclick="clearLog()">CLEAR</button>
+                        <button class="log-btn" onclick="exportLog()">EXPORT</button>
+                    </div>
+                </div>
+                <div class="log-stream" id="logStream"></div>
+                <div class="thinking-row" id="thinkingRow">
+                    <div class="tdots"><div class="td"></div><div class="td"></div><div class="td"></div></div>
+                    <span class="tlabel2">ARIA is processing…</span>
+                </div>
+            </div>
+
+            <!-- RIGHT LEDGER -->
+            <div class="ledger-col">
+                <div class="ledger-head">
+                    <span class="ledger-title">Transaction Ledger</span>
+                    <span class="lcnt" id="ledgerCount">0 actions</span>
+                </div>
+                <div class="stats-row">
+                    <div class="scard"><div class="slabel">Total Debited</div><div class="sval debit" id="totalDebit">₹ 0</div></div>
+                    <div class="scard"><div class="slabel">Actions Today</div><div class="sval credit" id="totalActions">0</div></div>
+                </div>
+                <div class="ledger-table-wrap">
+                    <div class="empty-ledger" id="emptyLedger">No actions yet.<br/>Speak or type a command to begin.</div>
+                    <table class="ledger" id="ledgerTable" style="display:none">
+                        <thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead>
+                        <tbody id="ledgerBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Waveform — always on -->
-    <div class="wave-wrap">
-      <canvas id="waveCanvas"></canvas>
-      <span class="mic-always-on" id="micAlwaysOn">REC</span>
+    <!-- Supervisor View -->
+    <div id="supervisorView" class="supervisor-view" style="display:none">
+        <div class="supervisor-header">
+            <h2>Supervisor Dashboard</h2>
+            <div class="supervisor-status">
+                <span id="sup1Status">Customer 1: Offline</span>
+                <span id="sup2Status">Customer 2: Offline</span>
+            </div>
+        </div>
+        <div class="supervisor-columns">
+            <div class="supervisor-column">
+                <h3>Customer 1</h3>
+                <div class="sup-balances" id="sup1Balances">
+                    <div>Savings: ₹0.00</div>
+                    <div>Current: ₹0.00</div>
+                </div>
+                <div class="sup-log-header"><span>Interaction Log</span><button class="log-btn" onclick="clearCustomerLog('customer1')">CLEAR CHAT</button></div>
+                <div class="sup-log" id="sup1Log"></div>
+                <div class="sup-ledger-wrap">
+                    <div class="sup-ledger-header"><span>Transaction Ledger</span></div>
+                    <div class="empty-ledger" id="sup1EmptyLedger">No transactions yet.</div>
+                    <div class="ledger-table-wrap" id="sup1LedgerTable" style="display:none">
+                        <table class="ledger">
+                            <thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead>
+                            <tbody id="sup1LedgerBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="supervisor-column">
+                <h3>Customer 2</h3>
+                <div class="sup-balances" id="sup2Balances">
+                    <div>Savings: ₹0.00</div>
+                    <div>Current: ₹0.00</div>
+                </div>
+                <div class="sup-log-header"><span>Interaction Log</span><button class="log-btn" onclick="clearCustomerLog('customer2')">CLEAR CHAT</button></div>
+                <div class="sup-log" id="sup2Log"></div>
+                <div class="sup-ledger-wrap">
+                    <div class="sup-ledger-header"><span>Transaction Ledger</span></div>
+                    <div class="empty-ledger" id="sup2EmptyLedger">No transactions yet.</div>
+                    <div class="ledger-table-wrap" id="sup2LedgerTable" style="display:none">
+                        <table class="ledger">
+                            <thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead>
+                            <tbody id="sup2LedgerBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- VAD silence countdown bar -->
-    <div class="vad-bar-wrap"><div class="vad-bar" id="vadBar"></div></div>
-
-    <!-- Mute / unmute button (replaces push-to-speak) -->
-    <div class="mic-wrap">
-      <button class="mic-btn" id="micBtn" onclick="toggleMute()">
-        <span id="micIcon">MIC</span><span id="micLabel">Initializing mic…</span>
-      </button>
-      <button class="log-btn" id="resetBtn" onclick="resetSession()" style="margin-top:6px;width:100%;font-size:10px;letter-spacing:.08em;" title="Clear all pending state and restart listening">↺ RESET SESSION</button><button id="endSessionBtn" class="log-btn" onclick="endSession()" title="End this banking session and turn off microphone">⏹ END SESSION</button></button>
-    </div>
-
-    <div class="tbox">
-      <div class="tlabel">You said</div>
-      <div class="ttext" id="transcriptText">Waiting for input…</div>
-    </div>
-
-    <div class="manual-wrap">
-      <input class="manual-input" id="manualInput" type="text" placeholder="Or type your request here…" onkeydown="if(event.key==='Enter')sendManual()"/>
-      <button class="manual-send" onclick="sendManual()">SEND</button>
-    </div>
-
-    <div class="hints">
-      <div class="hints-label">Quick commands — click to try</div>
-      <span class="chip" onclick="runHint(this.textContent)">Transfer ₹5000 to Rahul</span>
-      <span class="chip" onclick="runHint(this.textContent)">Pay electricity bill ₹1200</span>
-      <span class="chip" onclick="runHint(this.textContent)">Check my savings balance</span>
-      <span class="chip" onclick="runHint(this.textContent)">Block my debit card</span>
-      <span class="chip" onclick="runHint(this.textContent)">Send last 3 months statement</span>
-      <span class="chip" onclick="runHint(this.textContent)">Transfer ₹2000 from current to Priya</span>
-    </div>
-
-    <div class="accounts">
-      <div class="col-head" style="padding:0 0 10px;border:none">Linked Accounts</div>
-      <div class="acct-card" id="savingsCard">
-        <div class="acct-type">Savings Account</div>
-        <div class="acct-num" id="savingsAccNum">•••• •••• ••••</div>
-        <div class="acct-bal green" id="savingsBal">₹ 1,24,500.00</div>
-        <div class="acct-chg" id="savingsChg"></div>
-      </div>
-      <div class="acct-card" id="currentCard">
-        <div class="acct-type">Current Account</div>
-        <div class="acct-num" id="currentAccNum">•••• •••• ••••</div>
-        <div class="acct-bal amber" id="currentBal">₹ 58,200.00</div>
-        <div class="acct-chg" id="currentChg"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- CENTER LOG -->
-  <div class="log-col">
-    <div class="log-head">
-      <span class="log-title">Interaction Log</span>
-      <div class="log-actions">
-        <button class="log-btn" onclick="clearLog()">CLEAR</button>
-        <button class="log-btn" onclick="exportLog()">EXPORT</button>
-      </div>
-    </div>
-    <div class="log-stream" id="logStream"></div>
-    <div class="thinking-row" id="thinkingRow">
-      <div class="tdots"><div class="td"></div><div class="td"></div><div class="td"></div></div>
-      <span class="tlabel2">ARIA is processing…</span>
-    </div>
-  </div>
-
-  <!-- RIGHT LEDGER -->
-  <div class="ledger-col">
-    <div class="ledger-head">
-      <span class="ledger-title">Transaction Ledger</span>
-      <span class="lcnt" id="ledgerCount">0 actions</span>
-    </div>
-    <div class="stats-row">
-      <div class="scard"><div class="slabel">Total Debited</div><div class="sval debit" id="totalDebit">₹ 0</div></div>
-      <div class="scard"><div class="slabel">Actions Today</div><div class="sval credit" id="totalActions">0</div></div>
-    </div>
-    <div class="ledger-table-wrap">
-      <div class="empty-ledger" id="emptyLedger">No actions yet.<br/>Speak or type a command to begin.</div>
-      <table class="ledger" id="ledgerTable" style="display:none">
-        <thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead>
-        <tbody id="ledgerBody"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-</div>
-
-<!-- Supervisor View -->
-<div id="supervisorView" class="supervisor-view" style="display:none">
-  <div class="supervisor-header">
-    <h2>Supervisor Dashboard</h2>
-    <div class="supervisor-status">
-      <span id="sup1Status">Customer 1: Offline</span>
-      <span id="sup2Status">Customer 2: Offline</span>
-    </div>
-  </div>
-  <div class="supervisor-columns">
-    <div class="supervisor-column">
-      <h3>Customer 1</h3>
-      <div class="sup-balances" id="sup1Balances">
-        <div>Savings: ₹0.00</div>
-        <div>Current: ₹0.00</div>
-      </div>
-      <div class="sup-log-header"><span>Interaction Log</span><button class="log-btn" onclick="clearCustomerLog('customer1')">CLEAR CHAT</button></div><div class="sup-log" id="sup1Log"></div><div class="sup-ledger-wrap"><div class="sup-ledger-header"><span>Transaction Ledger</span></div><div class="empty-ledger" id="sup1EmptyLedger">No transactions yet.</div><div class="ledger-table-wrap" id="sup1LedgerTable" style="display:none"><table class="ledger"><thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead><tbody id="sup1LedgerBody"></tbody></table></div></div>
-      <div class="sup-ledger">
-        <div class="empty-ledger" id="sup1EmptyLedger">No actions yet.<br/>Waiting for customer activity.</div>
-        <table class="ledger" id="sup1LedgerTable" style="display:none">
-          <thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead>
-          <tbody id="sup1LedgerBody"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="supervisor-column">
-      <h3>Customer 2</h3>
-      <div class="sup-balances" id="sup2Balances">
-        <div>Savings: ₹0.00</div>
-        <div>Current: ₹0.00</div>
-      </div>
-      <div class="sup-log-header"><span>Interaction Log</span><button class="log-btn" onclick="clearCustomerLog('customer2')">CLEAR CHAT</button></div><div class="sup-log" id="sup2Log"></div><div class="sup-ledger-wrap"><div class="sup-ledger-header"><span>Transaction Ledger</span></div><div class="empty-ledger" id="sup2EmptyLedger">No transactions yet.</div><div class="ledger-table-wrap" id="sup2LedgerTable" style="display:none"><table class="ledger"><thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead><tbody id="sup2LedgerBody"></tbody></table></div></div>
-      <div class="sup-ledger">
-        <div class="empty-ledger" id="sup2EmptyLedger">No actions yet.<br/>Waiting for customer activity.</div>
-        <table class="ledger" id="sup2LedgerTable" style="display:none">
-          <thead><tr><th>#</th><th>Time</th><th>Action</th><th>Details</th><th>Amount</th><th>Status</th></tr></thead>
-          <tbody id="sup2LedgerBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script src="assets/js/helpers.js"></script>
-<script src="assets/js/profile.js"></script>
-<script src="assets/js/state.js"></script>
-<script src="assets/js/dom.js"></script>
-<script src="assets/js/log.js"></script>
-<script src="assets/js/ledger.js"></script>
-<script src="assets/js/waveform.js"></script>
-<script src="assets/js/voice-ui.js"></script>
-<script src="assets/js/nlp.js"></script>
-<script src="assets/js/intents.js"></script>
-<script src="assets/js/process-input.js"></script>
-<script src="assets/js/mic.js"></script>
-<script src="assets/js/session-store.js"></script>
-<script src="assets/js/firebase-sync.js"></script>
-<script src="assets/js/role-gate.js"></script>
-<script src="assets/js/globals.js"></script>
-<script src="assets/js/app-init.js"></script>
-<div id="toast" class="toast"></div>
+    <script src="assets/js/helpers.js"></script>
+    <script src="assets/js/profile.js"></script>
+    <script src="assets/js/state.js"></script>
+    <script src="assets/js/dom.js"></script>
+    <script src="assets/js/log.js"></script>
+    <script src="assets/js/ledger.js"></script>
+    <script src="assets/js/waveform.js"></script>
+    <script src="assets/js/voice-ui.js"></script>
+    <script src="assets/js/nlp.js"></script>
+    <script src="assets/js/intents.js"></script>
+    <script src="assets/js/ai-nlp.js"></script>
+    <script src="assets/js/process-input.js"></script>
+    <script src="assets/js/mic.js"></script>
+    <script src="assets/js/session-store.js"></script>
+    <script src="assets/js/firebase-sync.js"></script>
+    <script src="assets/js/role-gate.js"></script>
+    <script src="assets/js/globals.js"></script>
+    <script src="assets/js/app-init.js"></script>
+    <div id="toast" class="toast"></div>
 </body>
 </html>
