@@ -42,6 +42,66 @@ const IntentSchema = z.object({
   clarification_question: z.string().nullable()
 });
 
+const ALLOWED_INTENTS = [
+  'transfer',
+  'pay_bill',
+  'check_balance',
+  'block_card',
+  'request_statement',
+  'end_session',
+  'unknown'
+];
+
+const SAFE_UNKNOWN_INTENT = {
+  intent: 'unknown',
+  amount: null,
+  recipient: null,
+  source_account: null,
+  biller: null,
+  statement_period: null,
+  spoken: null,
+  confidence: 0,
+  needs_confirmation: true,
+  clarification_question: 'Sorry, I did not fully understand that. Please repeat your request.'
+};
+
+function normalizeNullableString(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function toSafeIntent(payload, originalText = '') {
+  const obj = payload && typeof payload === 'object' ? payload : {};
+
+  const normalized = {
+    intent: ALLOWED_INTENTS.includes(obj.intent) ? obj.intent : 'unknown',
+    amount: typeof obj.amount === 'number' && Number.isFinite(obj.amount) ? obj.amount : null,
+    recipient: normalizeNullableString(obj.recipient),
+    source_account: obj.source_account === 'savings' || obj.source_account === 'current' ? obj.source_account : null,
+    biller: normalizeNullableString(obj.biller),
+    statement_period: normalizeNullableString(obj.statement_period),
+    spoken: normalizeNullableString(obj.spoken) || normalizeNullableString(originalText),
+    confidence: typeof obj.confidence === 'number' && obj.confidence >= 0 && obj.confidence <= 1 ? obj.confidence : 0,
+    needs_confirmation: typeof obj.needs_confirmation === 'boolean'
+      ? obj.needs_confirmation
+      : ['transfer', 'pay_bill', 'block_card', 'unknown'].includes(obj.intent),
+    clarification_question: normalizeNullableString(obj.clarification_question)
+  };
+
+  if (normalized.intent === 'unknown' && !normalized.clarification_question) {
+    normalized.clarification_question = 'Sorry, I did not fully understand that. Please repeat your request.';
+  }
+
+  const parsed = IntentSchema.safeParse(normalized);
+  if (parsed.success) return parsed.data;
+
+  return {
+    ...SAFE_UNKNOWN_INTENT,
+    spoken: normalizeNullableString(originalText)
+  };
+}
+
 function getOpenAIClient() {
   if (!process.env.OPENAI_API_KEY) return null;
   if (!client) {
@@ -103,30 +163,54 @@ app.post('/api/transcribe', upload.single('file'), async (req, res) => {
 app.post('/api/parse-intent', async (req, res) => {
   const text = String(req.body?.text || '').trim();
   const openai = getOpenAIClient();
+
   if (!openai) {
     return res.status(503).json({ error: 'openai_not_configured' });
   }
+
   if (!text) {
     return res.status(400).json({ error: 'missing_text' });
   }
+
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
+      temperature: 0,
+      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
-          content: 'You are a banking intent parser. Return JSON matching the schema.'
+          content:
+            'You are a banking intent parser for a voice banking assistant. ' +
+            'Return ONLY one JSON object with EXACTLY these keys: ' +
+            'intent, amount, recipient, source_account, biller, statement_period, spoken, confidence, needs_confirmation, clarification_question. ' +
+            'Allowed intent values are: transfer, pay_bill, check_balance, block_card, request_statement, end_session, unknown. ' +
+            'source_account must be savings, current, or null. ' +
+            'Use null for unknown fields. ' +
+            'confidence must be a number between 0 and 1. ' +
+            'needs_confirmation must be true for transfers, bill payments, card blocking, or uncertain requests. ' +
+            'Do not include markdown, code fences, or any text outside the JSON object.'
         },
-        { role: 'user', content: text }
-      ],
-      response_format: { type: 'json_object' }
+        {
+          role: 'user',
+          content: text
+        }
+      ]
     });
-    const raw = completion.choices[0].message.content;
-    const parsed = IntentSchema.parse(JSON.parse(raw));
-    return res.json(parsed);
+
+    const raw = completion.choices?.[0]?.message?.content || '{}';
+
+    let json;
+    try {
+      json = JSON.parse(raw);
+    } catch (_err) {
+      return res.json(toSafeIntent(null, text));
+    }
+
+    return res.json(toSafeIntent(json, text));
   } catch (err) {
     console.error('[parse-intent] failed:', err);
-    return res.status(500).json({ error: 'intent_parse_failed' });
+    return res.json(toSafeIntent(null, text));
   }
 });
 
