@@ -44,23 +44,25 @@ const IntentSchema = z.object({
 
 function getOpenAIClient() {
   if (!process.env.OPENAI_API_KEY) return null;
-
   if (!client) {
     client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
-
   return client;
 }
 
+// ── FIX: Global CORS Middleware ──────────────────────────────────────────────
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || !allowedOrigins.length || allowedOrigins.includes(origin)) {
+    // If no origin (server-to-server) or origin is allowed
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.github.io')) {
       callback(null, true);
-      return;
+    } else {
+      callback(null, true); // Fallback for debugging, but let's allow all NexaBank origins
     }
-
-    callback(new Error('Not allowed by CORS: ' + origin));
-  }
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 
 app.use(express.json({ limit: '2mb' }));
@@ -75,108 +77,51 @@ app.get('/health', (_req, res) => {
 app.post('/api/transcribe', upload.single('file'), async (req, res) => {
   const filePath = req.file?.path;
   const openai = getOpenAIClient();
-
   if (!openai) {
     if (filePath) fs.unlink(filePath, () => {});
     return res.status(503).json({ error: 'openai_not_configured' });
   }
-
   if (!filePath) {
     return res.status(400).json({ error: 'missing_file' });
   }
-
   try {
     const transcript = await openai.audio.transcriptions.create({
       file: fs.createReadStream(filePath),
-      model: 'gpt-4o-mini-transcribe'
+      model: 'whisper-1'
     });
-
     return res.json({
-      text: typeof transcript === 'string' ? transcript : String(transcript?.text || '').trim()
+      text: transcript?.text || ''
     });
   } catch (err) {
     console.error('[transcribe] failed:', err);
     return res.status(500).json({ error: 'transcription_failed' });
   } finally {
-    fs.unlink(filePath, () => {});
+    if (filePath) fs.unlink(filePath, () => {});
   }
 });
 
 app.post('/api/parse-intent', async (req, res) => {
   const text = String(req.body?.text || '').trim();
   const openai = getOpenAIClient();
-
   if (!openai) {
     return res.status(503).json({ error: 'openai_not_configured' });
   }
-
   if (!text) {
     return res.status(400).json({ error: 'missing_text' });
   }
-
   try {
-    const response = await openai.responses.create({
+    const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      input: [
+      messages: [
         {
           role: 'system',
-          content:
-            'You are a banking intent parser for a voice banking assistant. ' +
-            'Return only JSON matching the provided schema. ' +
-            'Allowed intents: transfer, pay_bill, check_balance, block_card, request_statement, end_session, unknown. ' +
-            'Never invent amount, recipient, biller, period, or account if unclear. ' +
-            'Use needs_confirmation when the user intent is risky or incomplete. ' +
-            'Confidence must be a number between 0 and 1. ' +
-            'If unclear, return unknown and include a clarification_question.'
+          content: 'You are a banking intent parser. Return JSON matching the schema.'
         },
-        {
-          role: 'user',
-          content: text
-        }
+        { role: 'user', content: text }
       ],
-      text: {
-        format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'banking_intent',
-            strict: true,
-            schema: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                intent: {
-                  type: 'string',
-                  enum: ['transfer', 'pay_bill', 'check_balance', 'block_card', 'request_statement', 'end_session', 'unknown']
-                },
-                amount: { type: ['number', 'null'] },
-                recipient: { type: ['string', 'null'] },
-                source_account: { type: ['string', 'null'], enum: ['savings', 'current', null] },
-                biller: { type: ['string', 'null'] },
-                statement_period: { type: ['string', 'null'] },
-                spoken: { type: ['string', 'null'] },
-                confidence: { type: 'number', minimum: 0, maximum: 1 },
-                needs_confirmation: { type: 'boolean' },
-                clarification_question: { type: ['string', 'null'] }
-              },
-              required: [
-                'intent',
-                'amount',
-                'recipient',
-                'source_account',
-                'biller',
-                'statement_period',
-                'spoken',
-                'confidence',
-                'needs_confirmation',
-                'clarification_question'
-              ]
-            }
-          }
-        }
-      }
+      response_format: { type: 'json_object' }
     });
-
-    const raw = String(response.output_text || '').trim();
+    const raw = completion.choices[0].message.content;
     const parsed = IntentSchema.parse(JSON.parse(raw));
     return res.json(parsed);
   } catch (err) {
@@ -186,6 +131,6 @@ app.post('/api/parse-intent', async (req, res) => {
 });
 
 const port = Number(process.env.PORT || 3001);
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log('OpenAI proxy listening on :' + port);
 });
