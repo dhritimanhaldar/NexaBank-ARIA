@@ -110,6 +110,69 @@ function getOpenAIClient() {
   return client;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableOpenAIError(err) {
+  const message = String(err?.message || '');
+  const code = String(err?.code || '');
+  const causeCode = String(err?.cause?.code || '');
+  const status = Number(err?.status || 0);
+
+  return (
+    status >= 500 ||
+    status === 408 ||
+    status === 429 ||
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNREFUSED' ||
+    causeCode === 'ECONNRESET' ||
+    causeCode === 'ETIMEDOUT' ||
+    causeCode === 'ECONNREFUSED' ||
+    /connection error/i.test(message) ||
+    /network/i.test(message) ||
+    /timeout/i.test(message)
+  );
+}
+
+async function transcribeWithRetry(openai, filePath, model, maxAttempts = 3) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const transcript = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(filePath),
+        model,
+        response_format: 'json'
+      });
+
+      return {
+        ok: true,
+        model,
+        text: transcript?.text || ''
+      };
+    } catch (err) {
+      lastError = err;
+      const retryable = isRetryableOpenAIError(err);
+
+      console.error(`[transcribe] attempt ${attempt}/${maxAttempts} failed for model ${model}:`, err);
+
+      if (!retryable || attempt === maxAttempts) {
+        break;
+      }
+
+      await sleep(600 * attempt);
+    }
+  }
+
+  return {
+    ok: false,
+    model,
+    error: lastError
+  };
+}
+
 // ── FIX: Global CORS Middleware ──────────────────────────────────────────────
 app.use(cors({
   origin(origin, callback) {
@@ -137,20 +200,43 @@ app.get('/health', (_req, res) => {
 app.post('/api/transcribe', upload.single('file'), async (req, res) => {
   const filePath = req.file?.path;
   const openai = getOpenAIClient();
+
   if (!openai) {
     if (filePath) fs.unlink(filePath, () => {});
     return res.status(503).json({ error: 'openai_not_configured' });
   }
+
   if (!filePath) {
     return res.status(400).json({ error: 'missing_file' });
   }
+
   try {
-    const transcript = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(filePath),
-      model: 'whisper-1'
+    const primary = await transcribeWithRetry(openai, filePath, 'gpt-4o-mini-transcribe', 3);
+    if (primary.ok) {
+      return res.json({
+        text: primary.text,
+        model: primary.model
+      });
+    }
+
+    const fallback = await transcribeWithRetry(openai, filePath, 'whisper-1', 2);
+    if (fallback.ok) {
+      return res.json({
+        text: fallback.text,
+        model: fallback.model
+      });
+    }
+
+    console.error('[transcribe] all transcription attempts failed', {
+      primaryModel: primary.model,
+      primaryError: primary.error?.message || String(primary.error || ''),
+      fallbackModel: fallback.model,
+      fallbackError: fallback.error?.message || String(fallback.error || '')
     });
-    return res.json({
-      text: transcript?.text || ''
+
+    return res.status(500).json({
+      error: 'transcription_failed',
+      detail: 'All transcription attempts failed'
     });
   } catch (err) {
     console.error('[transcribe] failed:', err);
