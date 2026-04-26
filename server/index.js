@@ -122,7 +122,7 @@ app.post('/api/transcribe', upload.single('file'), async (req, res) => {
       });
     }
   }
-});fix(server): implement robust whisper transcription and increase timeouts
+});
 
 app.post('/api/parse-intent', async (req, res) => {
   const text = String(req.body?.text || '').trim();
