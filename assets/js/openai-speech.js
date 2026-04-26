@@ -7,7 +7,12 @@
 
   async function transcribeWithOpenAI(blob) {
     if (!window.OPENAI_RUNTIME?.enabled) {
-      throw new Error('OpenAI runtime disabled');
+      throw new Error('OpenAI backend unavailable');
+    }
+
+    const base = getBackendBaseUrl();
+    if (!base) {
+      throw new Error('OpenAI backend URL is not configured');
     }
 
     const fd = new FormData();
@@ -17,7 +22,7 @@
     const timer = setTimeout(() => ctrl.abort(), window.OPENAI_RUNTIME.transcribeTimeoutMs);
 
     try {
-      const res = await fetch(getBackendBaseUrl() + '/api/transcribe', {
+      const res = await fetch(base + '/api/transcribe', {
         method: 'POST',
         body: fd,
         signal: ctrl.signal
@@ -29,6 +34,13 @@
       }
 
       return await res.json();
+    } catch (err) {
+      window.OPENAI_RUNTIME.enabled = false;
+      window.OPENAI_RUNTIME.backendReachable = false;
+      if (typeof window.probeOpenAIBackend === 'function') {
+        setTimeout(() => window.probeOpenAIBackend().catch(() => {}), 1000);
+      }
+      throw err;
     } finally {
       clearTimeout(timer);
     }
