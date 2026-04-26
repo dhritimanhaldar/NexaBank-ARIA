@@ -242,7 +242,24 @@ function processInput(text){
   const rawText = String(text || '').trim();
   if(!rawText) return;
 
-  if(/\b(my pin is|my password is|secure key is|my code is|my secret is)\b|\b\d{6,8}\b/.test(rawText.toLowerCase())) return;   const parsed0 = NLP.classify(rawText);   if(parsed0.intent === 'end_session'){     addLog('user','You',rawText);     const spoken = 'Of course. Thank you for banking with HSBC. Have a great day! Ending your session now.';     addLog('aria','ARIA',spoken);     if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();     speak(spoken, function(){ if(typeof endSession === 'function') endSession(); });     return;   }
+  const loweredRawText = rawText.toLowerCase();
+  const containsSensitiveSecret = /\b(my pin is|my password is|secure key is|my code is|my secret is)\b|\b\d{6,8}\b/.test(loweredRawText);
+
+  if(containsSensitiveSecret) return;
+
+  if(window.OPENAI_RUNTIME?.debug && typeof addLog === 'function'){
+    addLog('system', 'PROCESS', 'Input received: ' + rawText);
+  }
+
+  const parsed0 = NLP.classify(rawText);
+  if(parsed0.intent === 'end_session'){
+    addLog('user','You',rawText);
+    const spoken = 'Of course. Thank you for banking with HSBC. Have a great day! Ending your session now.';
+    addLog('aria','ARIA',spoken);
+    if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
+    speak(spoken, function(){ if(typeof endSession === 'function') endSession(); });
+    return;
+  }
 
   const fmt = n => '₹ ' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2 });
 

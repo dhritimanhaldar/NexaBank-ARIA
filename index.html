@@ -47,7 +47,7 @@
             <div class="perm-title">Enable Microphone</div>
             <div class="perm-sub">ARIA needs one-time microphone access to listen to you hands-free. The mic stays open so you never have to click again.</div>
             <button id="allowMicrophoneBtn" class="perm-btn">Allow Microphone</button>
-            <div class="perm-note">Secure local audio · No data leaves your browser</div>
+            <div class="perm-note">Secure mic access · Local UI with optional AI backend</div>
         </div>
     </section>
 
@@ -61,7 +61,7 @@
                 </div>
             </div>
             <div class="topbar-right">
-                <div class="local-badge">RUNS LOCALLY · NO API KEY</div>
+                <div class="local-badge" id="runtimeBadge">LOCAL UI · FALLBACK MODE</div>
                 <div class="pill"><div class="dot live" id="statusDot"></div><span id="statusLabel">READY</span></div>
                 <div class="pill"><span>ROLE</span><span id="roleBadge" style="color:var(--amber);margin-left:4px">UNSET</span></div>
                 <div class="pill"><span>LIVE MODE</span><span id="liveModeBadge" style="color:var(--text);margin-left:4px">LOCAL</span></div>
@@ -235,8 +235,11 @@
     <script src="assets/js/voice-ui.js"></script>
     <script src="assets/js/nlp.js"></script>
     <script src="assets/js/intents.js"></script>
-    <script src="assets/js/ai-nlp.js"></script>
     <script src="assets/js/process-input.js"></script>
+    <script src="assets/js/openai-config.js"></script>
+    <script src="assets/js/openai-speech.js"></script>
+    <script src="assets/js/openai-intent.js"></script>
+    <script src="assets/js/ai-nlp.js"></script>
     <script src="assets/js/mic.js"></script>
     <script src="assets/js/session-store.js"></script>
     <script src="assets/js/firebase-sync.js"></script>
