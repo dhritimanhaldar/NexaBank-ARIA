@@ -50,7 +50,7 @@ function getOpenAIClient() {
     client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       maxRetries: 5,
-      timeout: 60000
+      timeout: 90000 
     });
   }
   return client;
@@ -82,16 +82,25 @@ app.get('/health', (_req, res) => {
 async function transcribeWithRetry(openai, filePath, attempts = 3) {
   for (let i = 1; i <= attempts; i++) {
     try {
+      console.log(`[transcribe] Attempt ${i}/${attempts} for ${filePath}`);
       const transcript = await openai.audio.transcriptions.create({
         file: fs.createReadStream(filePath),
         model: 'whisper-1'
       });
       return transcript;
     } catch (err) {
-      const isNetworkError = err.name === 'APIConnectionError' || err.message.includes('ECONNRESET') || err.message.includes('ETIMEDOUT');
-      console.error(`[transcribe] attempt ${i}/${attempts} failed for model whisper-1:`, err.name, err.message);
+      const isNetworkError = err.name === 'APIConnectionError' || 
+                             err.message.includes('ECONNRESET') || 
+                             err.message.includes('ETIMEDOUT') ||
+                             err.message.includes('fetch failed');
+      
+      console.error(`[transcribe] attempt ${i}/${attempts} failed:`, err.name, err.message);
+      
       if (i === attempts || !isNetworkError) throw err;
-      await new Promise(resolve => setTimeout(resolve, i * 2000));
+      
+      const delay = i * 3000;
+      console.log(`[transcribe] Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 }
@@ -110,11 +119,16 @@ app.post('/api/transcribe', upload.single('file'), async (req, res) => {
   }
 
   try {
+    req.setTimeout(120000); 
     const transcript = await transcribeWithRetry(openai, filePath);
     return res.json({ text: transcript?.text || '' });
   } catch (err) {
     console.error('[transcribe] final failure:', err);
-    return res.status(500).json({ error: 'transcription_failed', details: err.message });
+    return res.status(500).json({ 
+      error: 'transcription_failed', 
+      details: err.message,
+      code: err.code 
+    });
   } finally {
     if (filePath) {
       fs.unlink(filePath, (err) => {
@@ -149,6 +163,9 @@ app.post('/api/parse-intent', async (req, res) => {
 });
 
 const port = Number(process.env.PORT || 3001);
-app.listen(port, '0.0.0.0', () => {
+const server = app.listen(port, '0.0.0.0', () => {
   console.log('OpenAI proxy listening on port ' + port);
 });
+
+server.keepAliveTimeout = 120000;
+server.headersTimeout = 125000;
