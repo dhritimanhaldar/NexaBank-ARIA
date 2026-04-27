@@ -15,8 +15,8 @@
   window.OPENAI_RUNTIME = {
     enabled: false,
     backendBaseUrl: getDefaultBackendBaseUrl(),
-    transcribeTimeoutMs: 20000,
-    intentTimeoutMs: 12000,
+    transcribeTimeoutMs: 90000, 
+    intentTimeoutMs: 30000,     
     minIntentConfidence: 0.72,
     highRiskConfirmThreshold: 0.9,
     debug: true,
@@ -27,52 +27,32 @@
     const badge = document.getElementById('runtimeBadge');
     if (badge) {
       badge.textContent = window.OPENAI_RUNTIME.enabled
-        ? 'LOCAL UI · OPENAI BACKEND'
-        : 'LOCAL UI · FALLBACK MODE';
-    }
-
-    const liveModeBadge = document.getElementById('liveModeBadge');
-    if (liveModeBadge) {
-      liveModeBadge.textContent = window.OPENAI_RUNTIME.enabled ? 'OPENAI' : 'LOCAL';
+        ? 'LOCAL UI + OPENAI BACKEND'
+        : 'LOCAL UI + FALLBACK MODEL';
+      badge.style.backgroundColor = window.OPENAI_RUNTIME.enabled ? '#28a745' : '#ffc107';
     }
   }
 
   async function probeOpenAIBackend() {
-    const base = normalizeBaseUrl(window.OPENAI_RUNTIME.backendBaseUrl);
-    if (!base) {
-      window.OPENAI_RUNTIME.enabled = false;
-      window.OPENAI_RUNTIME.backendReachable = false;
-      syncRuntimeUi();
-      return false;
-    }
-
     try {
-      const res = await fetch(base + '/health', { method: 'GET', cache: 'no-store' });
-      const ok = !!res.ok;
-      window.OPENAI_RUNTIME.backendReachable = ok;
-      window.OPENAI_RUNTIME.enabled = ok;
-      syncRuntimeUi();
-      return ok;
+      const resp = await fetch(`${window.OPENAI_RUNTIME.backendBaseUrl}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        window.OPENAI_RUNTIME.backendReachable = true;
+        window.OPENAI_RUNTIME.enabled = true;
+      }
     } catch (err) {
+      console.warn('[openai-config] Backend probe failed, using local fallback:', err.message);
       window.OPENAI_RUNTIME.backendReachable = false;
       window.OPENAI_RUNTIME.enabled = false;
-      if (window.OPENAI_RUNTIME.debug) {
-        console.warn('[openai-config] backend probe failed, falling back to local/browser mode:', err);
-      }
+    } finally {
       syncRuntimeUi();
-      return false;
     }
   }
 
-  window.probeOpenAIBackend = probeOpenAIBackend;
+  probeOpenAIBackend();
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-      syncRuntimeUi();
-      probeOpenAIBackend();
-    }, { once: true });
-  } else {
-    syncRuntimeUi();
-    probeOpenAIBackend();
-  }
 })();
