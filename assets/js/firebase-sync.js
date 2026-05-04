@@ -8,10 +8,15 @@ let firebaseSyncInitialized = false;
 let firebaseSyncDisabledReason = '';
 let heartbeatIntervalId = null;
 const STALE_LOCK_MS = 30000;
+const PRESENCE_STALE_MS = 15000;
+const SUPERVISOR_PRESENCE_MONITOR_MS = 3000;
+let supervisorPresenceMonitorId = null;
 // Tracks previous online/offline state per customer for supervisor status log entries
 const _customerOnlineState = {};
 // Tracks peer IDs for each customer session (used by supervisor for P2P calls)
 const _customerPeerIds = {};
+// Tracks last received customer snapshots so supervisor can age out stale tabs.
+const _customerSnapshots = {};
 
 function getCustomerPeerIdForCall(item) {
   if (!item || typeof item !== 'object') return '';
@@ -25,6 +30,8 @@ function getCustomerPeerIdForCall(item) {
 
 function isCustomerOnlineForPeerCall(item) {
   if (!item || typeof item !== 'object') return false;
+  if (hasExplicitOfflineSignal(item)) return false;
+  if (item.heartbeatAt) return hasFreshHeartbeat(item);
   return !!(
     item.online === true ||
     item.isOnline === true ||
@@ -35,10 +42,42 @@ function isCustomerOnlineForPeerCall(item) {
   );
 }
 
+function hasExplicitOfflineSignal(source = {}) {
+  return (
+    source.online === false ||
+    source.connected === false ||
+    source.status === 'offline' ||
+    source.presence === 'offline' ||
+    source.heartbeatAt === 1 ||
+    source.heartbeatAt === 0
+  );
+}
+
+function hasFreshHeartbeat(source = {}) {
+  const heartbeatAt = Number(source.heartbeatAt || 0);
+  return heartbeatAt > 1 && (Date.now() - heartbeatAt) < PRESENCE_STALE_MS;
+}
+
+function resolveCustomerOnlineState(source = {}) {
+  if (hasExplicitOfflineSignal(source)) return false;
+  if (source.heartbeatAt) return hasFreshHeartbeat(source);
+  return !!(
+    source.online === true ||
+    source.isOnline === true ||
+    source.connected === true ||
+    source.status === 'online' ||
+    source.presence === 'online' ||
+    source.locked === true
+  );
+}
+
 function normalizeSyncedCustomerState(source = {}) {
   const normalized = Object.assign({}, source || {});
-  normalized.peerId = source.peerId || null;
-  normalized.online = source.online === true || source.status === 'online' || source.connected === true;
+  normalized.peerId = source.peerId || source.customerPeerId || source.sessionPeerId || null;
+  normalized.online = resolveCustomerOnlineState(source);
+  normalized.connected = normalized.online;
+  normalized.status = normalized.online ? 'online' : 'offline';
+  normalized.presence = normalized.online ? 'online' : 'offline';
   return normalized;
 }
 
@@ -193,10 +232,11 @@ function applyCustomerSnapshot(customerId, data) {
   const emptyEl    = document.getElementById(isC1 ? 'sup1EmptyLedger': 'sup2EmptyLedger');
 
   // ── Online / offline badge ──────────────────────────────────────
-  const lastBeat = data.heartbeatAt || 0;
-  const isHeartbeatOnline = !!(lastBeat && (Date.now() - lastBeat) < 15000);
-  data.online = data.online === true || isHeartbeatOnline;
-  data.status = data.online ? 'online' : (data.status || 'offline');
+  data.online = resolveCustomerOnlineState(data);
+  data.connected = data.online;
+  data.status = data.online ? 'online' : 'offline';
+  data.presence = data.online ? 'online' : 'offline';
+  _customerSnapshots[customerId] = Object.assign({}, data);
 
   if (statusEl) {
     const isOnline = isCustomerOnlineForPeerCall(data);
@@ -337,6 +377,33 @@ function renderSupervisorCustomers() {
       talkBtn.outerHTML = talkButtonMarkup;
     }
   });
+}
+
+function refreshSupervisorPresenceFromSnapshots() {
+  if (!window.S || S.role !== 'supervisor') return;
+
+  ['customer1', 'customer2'].forEach(function(customerId) {
+    const snapshot = _customerSnapshots[customerId];
+    if (!snapshot) return;
+
+    const isNowOnline = resolveCustomerOnlineState(snapshot);
+    if (_customerOnlineState[customerId] === true && !isNowOnline) {
+      const applyFn = typeof window.applyCustomerSnapshot === 'function'
+        ? window.applyCustomerSnapshot
+        : applyCustomerSnapshot;
+      applyFn(customerId, Object.assign({}, snapshot, {
+        online: false,
+        connected: false,
+        status: 'offline',
+        presence: 'offline'
+      }));
+    }
+  });
+}
+
+function startSupervisorPresenceMonitor() {
+  if (supervisorPresenceMonitorId) return;
+  supervisorPresenceMonitorId = setInterval(refreshSupervisorPresenceFromSnapshots, SUPERVISOR_PRESENCE_MONITOR_MS);
 }
 
 // Builds the complete state snapshot the supervisor needs to mirror the customer UI.
@@ -571,6 +638,7 @@ function refreshCustomerLockTimestamp(roleId) {   if (!canUseFirebaseSync() || !
 
 function subscribeToRemoteSession(){
   if(S.role !== 'supervisor') return;
+  startSupervisorPresenceMonitor();
 
   // ── BroadcastChannel (same device, zero latency) ────────────────
   try {
@@ -649,12 +717,16 @@ async function publishLiveSnapshot(payload = {}) {
   if (S.role && S.role !== 'customer') return false;
 
   const channelId = S.customerId || 'global-live-session';
+  const isOfflinePayload = hasExplicitOfflineSignal(payload);
+  const heartbeatAt = Number(payload.heartbeatAt || 0) || (isOfflinePayload ? 1 : Date.now());
   const syncedPayload = normalizeSyncedCustomerState({
     ...payload,
     peerId: payload.peerId || getCurrentPeerIdForSync(),
-    online: payload.online === true || S.role === 'customer',
-    connected: payload.connected === true,
-    status: payload.status
+    heartbeatAt,
+    online: isOfflinePayload ? false : (payload.online === true || S.role === 'customer'),
+    connected: isOfflinePayload ? false : (payload.connected === true || S.role === 'customer'),
+    status: isOfflinePayload ? 'offline' : (payload.status || 'online'),
+    presence: isOfflinePayload ? 'offline' : (payload.presence || 'online')
   });
 
   // ── Same-device tab sync (zero latency via BroadcastChannel) ────────────
@@ -674,7 +746,7 @@ async function publishLiveSnapshot(payload = {}) {
     const safePayload = sanitizeFirestorePayload({
       customerId: channelId,
       role: S.role || 'customer',
-      heartbeatAt: syncedPayload?.heartbeatAt || Date.now(),
+      heartbeatAt: typeof syncedPayload?.heartbeatAt === 'number' ? syncedPayload.heartbeatAt : Date.now(),
       ...syncedPayload,
       updatedAt: serverTimestamp()
     });
@@ -694,6 +766,20 @@ async function publishLiveSnapshot(payload = {}) {
     disableFirebaseSync('publishLiveSnapshot-failed', err);
     return false;
   }
+}
+
+function publishOfflinePresence(reason) {
+  if (!window.S || S.role !== 'customer') return false;
+  if (typeof stopSessionHeartbeat === 'function') stopSessionHeartbeat();
+
+  return publishLiveSnapshot(buildFullSnapshot({
+    heartbeatAt: 1,
+    online: false,
+    connected: false,
+    status: 'offline',
+    presence: 'offline',
+    offlineReason: reason || 'customer-offline'
+  }));
 }
 
 // Clear all log entries from a supervisor customer column.
@@ -716,6 +802,7 @@ function clearCustomerLog(customerId) {
 if (typeof window !== 'undefined') {
   window.initFirebaseSync = initFirebaseSync;
   window.publishLiveSnapshot = publishLiveSnapshot;
+  window.publishOfflinePresence = publishOfflinePresence;
   window.scheduledPublish = scheduledPublish;
   window.buildFullSnapshot = buildFullSnapshot;
   window.startSessionHeartbeat = startSessionHeartbeat;
@@ -777,5 +864,24 @@ if (typeof window !== 'undefined') {
     }
   });
 
-   // ── Release lock on tab close / navigation ──────────────────────   function _releaseActiveSessionLock() {     const roleId = window.S && (S.customerId || S.role);     if (roleId && typeof releaseCustomerLock === 'function') {       releaseCustomerLock(roleId).catch(() => {});     }   }   window.addEventListener('beforeunload', _releaseActiveSessionLock);   document.addEventListener('visibilitychange', function() {     if (document.visibilityState === 'hidden') _releaseActiveSessionLock();   });
+  // ── Release lock on tab close / navigation ──────────────────────
+  function _releaseActiveSessionLock(markOffline) {
+    const roleId = window.S && (S.customerId || S.role);
+    if (markOffline === true && window.S && S.role === 'customer' && typeof publishOfflinePresence === 'function') {
+      publishOfflinePresence('tab-closing');
+    }
+    if (roleId && typeof releaseCustomerLock === 'function') {
+      releaseCustomerLock(roleId).catch(() => {});
+    }
+  }
+
+  window.addEventListener('pagehide', function() {
+    _releaseActiveSessionLock(true);
+  });
+  window.addEventListener('beforeunload', function() {
+    _releaseActiveSessionLock(true);
+  });
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') _releaseActiveSessionLock(false);
+  });
 }

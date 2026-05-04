@@ -20,6 +20,8 @@ function getCustomerPeerIdForCall(item) {
 
 function isCustomerOnlineForPeerCall(item) {
   if (!item || typeof item !== 'object') return false;
+  if (hasCustomerOfflineSignal(item)) return false;
+  if (item.heartbeatAt) return hasFreshCustomerHeartbeat(item);
   return !!(
     item.online === true ||
     item.isOnline === true ||
@@ -28,6 +30,26 @@ function isCustomerOnlineForPeerCall(item) {
     item.presence === 'online' ||
     item.locked === true
   );
+}
+
+function hasCustomerOfflineSignal(item) {
+  return !!(
+    item &&
+    typeof item === 'object' &&
+    (
+      item.online === false ||
+      item.connected === false ||
+      item.status === 'offline' ||
+      item.presence === 'offline' ||
+      item.heartbeatAt === 1 ||
+      item.heartbeatAt === 0
+    )
+  );
+}
+
+function hasFreshCustomerHeartbeat(item) {
+  const heartbeatAt = Number(item?.heartbeatAt || 0);
+  return heartbeatAt > 1 && (Date.now() - heartbeatAt) < 15000;
 }
 
 function initSupervisorUI() {
@@ -105,16 +127,20 @@ function updateCustomerSession(customerId, data) {
   }
 
   const session = supervisorState.customerSessions[customerId];
+  const isOffline = hasCustomerOfflineSignal(data);
 
   // Update status based on heartbeat
   if (data.heartbeatAt) {
-    const isOnline = data.heartbeatAt && (Date.now() - data.heartbeatAt) < 15000;
+    const isOnline = hasFreshCustomerHeartbeat(data) && !isOffline;
     session.status = isOnline ? 'online' : 'offline';
     session.online = isOnline;
   }
 
   session.peerId = data.peerId || session.peerId || null;
-  session.online = data.online === true || data.status === 'online' || data.connected === true || session.online === true;
+  session.online = isOffline
+    ? false
+    : (data.online === true || data.status === 'online' || data.connected === true || session.online === true);
+  session.status = session.online ? 'online' : 'offline';
 
   // Store peerId for calls
   if (data.peerId) {
