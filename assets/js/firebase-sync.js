@@ -13,6 +13,44 @@ const _customerOnlineState = {};
 // Tracks peer IDs for each customer session (used by supervisor for P2P calls)
 const _customerPeerIds = {};
 
+function getCustomerPeerIdForCall(item) {
+  if (!item || typeof item !== 'object') return '';
+  return String(
+    item.peerId ||
+    item.customerPeerId ||
+    item.sessionPeerId ||
+    ''
+  ).trim();
+}
+
+function isCustomerOnlineForPeerCall(item) {
+  if (!item || typeof item !== 'object') return false;
+  return !!(
+    item.online === true ||
+    item.isOnline === true ||
+    item.connected === true ||
+    item.status === 'online' ||
+    item.presence === 'online' ||
+    item.locked === true
+  );
+}
+
+function normalizeSyncedCustomerState(source = {}) {
+  const normalized = Object.assign({}, source || {});
+  normalized.peerId = source.peerId || null;
+  normalized.online = source.online === true || source.status === 'online' || source.connected === true;
+  return normalized;
+}
+
+function getCurrentPeerIdForSync() {
+  const peerState = window.S?.peer;
+  if (peerState?.ready && peerState.id) return peerState.id;
+  if (window.S?.customerSession?.peerId) return window.S.customerSession.peerId;
+  if (window.S?.currentCustomer?.peerId) return window.S.currentCustomer.peerId;
+  if (window.S?.session?.peerId) return window.S.session.peerId;
+  return null;
+}
+
 function logSyncInfo(message, extra) {
   if (typeof extra !== 'undefined') {
     console.log(`${NEXABANK_SYNC_PREFIX} ${message}`, extra);
@@ -136,11 +174,14 @@ function getLocalChannel() {
 // applyCustomerSnapshot — called on supervisor tab to update the correct customer column.
 function applyCustomerSnapshot(customerId, data) {
   if (!data) return;
+  data = normalizeSyncedCustomerState(data);
 
   // Store peerId for this customer so supervisor can initiate calls
   if (data.peerId) {
     _customerPeerIds[customerId] = data.peerId;
     console.log('[NexaBank] Stored peerId for', customerId, ':', data.peerId);
+  } else if (_customerPeerIds[customerId]) {
+    data.peerId = _customerPeerIds[customerId];
   }
 
   const isC1 = customerId === 'customer1';
@@ -152,16 +193,19 @@ function applyCustomerSnapshot(customerId, data) {
   const emptyEl    = document.getElementById(isC1 ? 'sup1EmptyLedger': 'sup2EmptyLedger');
 
   // ── Online / offline badge ──────────────────────────────────────
+  const lastBeat = data.heartbeatAt || 0;
+  const isHeartbeatOnline = !!(lastBeat && (Date.now() - lastBeat) < 15000);
+  data.online = data.online === true || isHeartbeatOnline;
+  data.status = data.online ? 'online' : (data.status || 'offline');
+
   if (statusEl) {
-    const lastBeat = data.heartbeatAt || 0;
-    const isOnline = lastBeat && (Date.now() - lastBeat) < 15000;
+    const isOnline = isCustomerOnlineForPeerCall(data);
     statusEl.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
     statusEl.className = 'sup-status ' + (isOnline ? 'online' : 'offline');
   }
     // ── Online / offline state change detection ───────────────────────
   {
-    const lastBeat = data.heartbeatAt || 0;
-    const isNowOnline = !!(lastBeat && (Date.now() - lastBeat) < 15000);
+    const isNowOnline = isCustomerOnlineForPeerCall(data);
     const wasOnline = _customerOnlineState[customerId];
     if (typeof wasOnline === 'boolean' && wasOnline !== isNowOnline) {
       // State changed — inject a system log entry into the supervisor log panel
@@ -195,16 +239,29 @@ function applyCustomerSnapshot(customerId, data) {
   if (S.role === 'supervisor') {
     const columnEl = document.querySelector(isC1 ? '.supervisor-column:first-child' : '.supervisor-column:last-child');
     if (columnEl) {
-      let talkBtn = columnEl.querySelector('.talk-to-customer-btn');
+      const item = Object.assign({}, data, {
+        peerId: data.peerId || _customerPeerIds[customerId] || null,
+        online: data.online === true || _customerOnlineState[customerId] === true
+      });
+      const peerId = getCustomerPeerIdForCall(item);
+      const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId;
+      const talkButtonMarkup =
+        '<button\n' +
+        '  class="talk-to-customer-btn"\n' +
+        '  type="button"\n' +
+        '  data-peer-id="' + peerId + '"\n' +
+        '  ' + (canTalk ? '' : 'disabled') + '\n' +
+        '>\n' +
+        '  Talk to Customer\n' +
+        '</button>';
+      const talkBtn = columnEl.querySelector('.talk-to-customer-btn');
       if (!talkBtn) {
-        talkBtn = document.createElement('button');
-        talkBtn.className = 'talk-to-customer-btn';
-        talkBtn.type = 'button';
-        talkBtn.textContent = 'Talk to Customer';
-        columnEl.insertBefore(talkBtn, balEl.nextSibling);
+        const tpl = document.createElement('template');
+        tpl.innerHTML = talkButtonMarkup.trim();
+        columnEl.insertBefore(tpl.content.firstChild, balEl ? balEl.nextSibling : columnEl.firstChild);
+      } else {
+        talkBtn.outerHTML = talkButtonMarkup;
       }
-      talkBtn.dataset.peerId = data.peerId || '';
-      talkBtn.disabled = !(_customerOnlineState[customerId] && data.peerId);
     }
   }
 
@@ -246,9 +303,45 @@ function applyCustomerSnapshot(customerId, data) {
   }
 }
 
+function renderSupervisorCustomers() {
+  if (!window.S || S.role !== 'supervisor') return;
+
+  ['customer1', 'customer2'].forEach(function(customerId) {
+    const isC1 = customerId === 'customer1';
+    const columnEl = document.querySelector(isC1 ? '.supervisor-column:first-child' : '.supervisor-column:last-child');
+    const balEl = document.getElementById(isC1 ? 'sup1Balances' : 'sup2Balances');
+    if (!columnEl) return;
+
+    const item = {
+      peerId: _customerPeerIds[customerId] || null,
+      online: _customerOnlineState[customerId] === true
+    };
+    const peerId = getCustomerPeerIdForCall(item);
+    const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId;
+    const talkButtonMarkup =
+      '<button\n' +
+      '  class="talk-to-customer-btn"\n' +
+      '  type="button"\n' +
+      '  data-peer-id="' + peerId + '"\n' +
+      '  ' + (canTalk ? '' : 'disabled') + '\n' +
+      '>\n' +
+      '  Talk to Customer\n' +
+      '</button>';
+    const talkBtn = columnEl.querySelector('.talk-to-customer-btn');
+
+    if (!talkBtn) {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = talkButtonMarkup.trim();
+      columnEl.insertBefore(tpl.content.firstChild, balEl ? balEl.nextSibling : columnEl.firstChild);
+    } else {
+      talkBtn.outerHTML = talkButtonMarkup;
+    }
+  });
+}
+
 // Builds the complete state snapshot the supervisor needs to mirror the customer UI.
 function buildFullSnapshot(extra = {}) {
-  const myPeerId = (typeof window.getMyPeerId === 'function') ? window.getMyPeerId() : null;
+  const myPeerId = getCurrentPeerIdForSync();
   return Object.assign({
     accounts:     S.accounts,
     transactions: S.transactions  || [],
@@ -257,7 +350,8 @@ function buildFullSnapshot(extra = {}) {
     totalDebit:   S.totalDebit    || 0,
     statusLabel:  (typeof DOM !== 'undefined' && DOM.statusLabel)
                     ? DOM.statusLabel.textContent : '',
-    peerId:       myPeerId
+    peerId:       myPeerId,
+    online:       S.role === 'customer'
   }, extra || {});
 }
 
@@ -555,12 +649,19 @@ async function publishLiveSnapshot(payload = {}) {
   if (S.role && S.role !== 'customer') return false;
 
   const channelId = S.customerId || 'global-live-session';
+  const syncedPayload = normalizeSyncedCustomerState({
+    ...payload,
+    peerId: payload.peerId || getCurrentPeerIdForSync(),
+    online: payload.online === true || S.role === 'customer',
+    connected: payload.connected === true,
+    status: payload.status
+  });
 
   // ── Same-device tab sync (zero latency via BroadcastChannel) ────────────
   // Include customerId so the supervisor panel can route to the right column.
   try {
     const bc = getLocalChannel();
-    if (bc) bc.postMessage({ type: 'nexabank_snapshot', customerId: channelId, payload });
+    if (bc) bc.postMessage({ type: 'nexabank_snapshot', customerId: channelId, payload: syncedPayload });
   } catch (bcErr) {
     console.warn('[NexaBank] BroadcastChannel post failed:', bcErr);
   }
@@ -573,8 +674,8 @@ async function publishLiveSnapshot(payload = {}) {
     const safePayload = sanitizeFirestorePayload({
       customerId: channelId,
       role: S.role || 'customer',
-      heartbeatAt: payload?.heartbeatAt || Date.now(),
-      ...payload,
+      heartbeatAt: syncedPayload?.heartbeatAt || Date.now(),
+      ...syncedPayload,
       updatedAt: serverTimestamp()
     });
 
@@ -628,49 +729,51 @@ if (typeof window !== 'undefined') {
   window.applyCustomerSnapshot = applyCustomerSnapshot;
   window.clearCustomerLog = clearCustomerLog;
   window.refreshCustomerLockTimestamp = refreshCustomerLockTimestamp;
+  window.renderSupervisorCustomers = renderSupervisorCustomers;
   window.getCustomerPeerId = function(customerId) {
     return _customerPeerIds[customerId] || null;
   };
 
   // ── Talk to Customer button click handling ──────────────────────
-  document.addEventListener('click', function(e) {
-    if (e.target && e.target.classList.contains('talk-to-customer-btn')) {
-      const peerId = e.target.dataset.peerId;
-      if (!peerId) {
-        console.warn('[supervisor] Talk to Customer button clicked but no peerId available');
-        return;
-      }
-      try {
-        if (window.NexaPeerCalling && typeof window.NexaPeerCalling.callCustomerPeer === 'function') {
-          window.NexaPeerCalling.callCustomerPeer(peerId);
-        } else {
-          console.error('[supervisor] NexaPeerCalling.callCustomerPeer not available');
-        }
-      } catch (err) {
-        console.error('[supervisor] Failed to initiate call:', err);
-      }
+  document.addEventListener('click', async function(event) {
+    const button = event.target.closest('.talk-to-customer-btn');
+    if (!button) return;
+
+    const peerId = String(button.dataset.peerId || '').trim();
+    if (!peerId) {
+      console.warn('[peerjs] cannot call customer: missing peerId');
+      return;
+    }
+
+    try {
+      await window.NexaPeerCalling.callCustomerPeer(peerId);
+    } catch (err) {
+      console.error('[peerjs] failed to call customer:', err);
     }
   });
 
-  // ── Listen for peer presence updates ──────────────────────────────
-  document.addEventListener('nexa:peer-presence-updated', (e) => {
-    if (S.role !== 'supervisor') return;
-    const { peerId, role } = e.detail;
-    if (role !== 'customer') return;
+  document.addEventListener('nexa:peer-presence-updated', function (event) {
+    const detail = event.detail || {};
+    if (detail.role !== 'customer' || !detail.peerId || S.role !== 'customer') return;
 
-    // Find which customer this peerId belongs to
-    const customerId = Object.keys(_customerPeerIds).find(id => _customerPeerIds[id] === peerId);
-    if (!customerId) return;
+    if (S.customerId) {
+      _customerPeerIds[S.customerId] = detail.peerId;
+    }
 
-    // Update the button state for this customer
-    const isC1 = customerId === 'customer1';
-    const columnEl = document.querySelector(isC1 ? '.supervisor-column:first-child' : '.supervisor-column:last-child');
-    if (columnEl) {
-      const talkBtn = columnEl.querySelector('.talk-to-customer-btn');
-      if (talkBtn) {
-        talkBtn.dataset.peerId = peerId;
-        talkBtn.disabled = !(_customerOnlineState[customerId] && peerId);
-      }
+    if (typeof publishLiveSnapshot === 'function') {
+      publishLiveSnapshot(buildFullSnapshot({
+        peerId: detail.peerId,
+        online: true,
+        connected: true,
+        status: 'online',
+        heartbeatAt: Date.now()
+      }));
+    }
+  });
+
+  document.addEventListener('nexa:peer-presence-updated', function () {
+    if (typeof renderSupervisorCustomers === 'function') {
+      renderSupervisorCustomers();
     }
   });
 

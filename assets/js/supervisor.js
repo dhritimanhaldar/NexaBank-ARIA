@@ -8,24 +8,58 @@ let supervisorState = {
   activeCallCustomerId: null
 };
 
+function getCustomerPeerIdForCall(item) {
+  if (!item || typeof item !== 'object') return '';
+  return String(
+    item.peerId ||
+    item.customerPeerId ||
+    item.sessionPeerId ||
+    ''
+  ).trim();
+}
+
+function isCustomerOnlineForPeerCall(item) {
+  if (!item || typeof item !== 'object') return false;
+  return !!(
+    item.online === true ||
+    item.isOnline === true ||
+    item.connected === true ||
+    item.status === 'online' ||
+    item.presence === 'online' ||
+    item.locked === true
+  );
+}
+
 function initSupervisorUI() {
   if (S.role !== 'supervisor') return;
-  
+
   // Add "Talk to Customer" buttons to each column
   const columns = document.querySelectorAll('.supervisor-column');
   columns.forEach(function(col, idx) {
     const customerId = idx === 0 ? 'customer1' : 'customer2';
     const h3 = col.querySelector('h3');
-    if (h3 && !col.querySelector('.talk-to-customer-btn')) {
-      const talkBtn = document.createElement('button');
-      talkBtn.className = 'talk-to-customer-btn';
-      talkBtn.textContent = 'Talk to Customer';
-      talkBtn.dataset.customerId = customerId;
-      talkBtn.disabled = true;
-      talkBtn.addEventListener('click', function() {
-        handleTalkToCustomer(customerId);
-      });
-      h3.parentNode.insertBefore(talkBtn, h3.nextSibling);
+    if (h3) {
+      const item = supervisorState.customerSessions[customerId] || {};
+      const peerId = getCustomerPeerIdForCall(item);
+      const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId;
+      const talkButtonMarkup =
+        '<button\n' +
+        '  class="talk-to-customer-btn"\n' +
+        '  type="button"\n' +
+        '  data-peer-id="' + peerId + '"\n' +
+        '  ' + (canTalk ? '' : 'disabled') + '\n' +
+        '>\n' +
+        '  Talk to Customer\n' +
+        '</button>';
+      const existingBtn = col.querySelector('.talk-to-customer-btn');
+
+      if (!existingBtn) {
+        const tpl = document.createElement('template');
+        tpl.innerHTML = talkButtonMarkup.trim();
+        h3.parentNode.insertBefore(tpl.content.firstChild, h3.nextSibling);
+      } else {
+        existingBtn.outerHTML = talkButtonMarkup;
+      }
     }
   });
 }
@@ -33,80 +67,60 @@ function initSupervisorUI() {
 function determineTalkButtonState(customerId) {
   const session = supervisorState.customerSessions[customerId];
   if (!session) return true;
-  
-  const isOffline = session.status === 'offline' ||
-                    session.status === 'disconnected' ||
-                    !session.peerId;
-  if (isOffline) return true;
-  
-  const isSpeaking = session.isSpeaking === true ||
-                     session.isThinking === true;
-  if (isSpeaking) return true;
-  
-  // Can't call if another call is active
-  if (supervisorState.activeCallCustomerId && supervisorState.activeCallCustomerId !== customerId) {
-    return true;
-  }
-  
-  return false;
+
+  const peerId = getCustomerPeerIdForCall(session);
+  const canTalk = isCustomerOnlineForPeerCall(session) && !!peerId;
+  return !canTalk;
 }
 
-function handleTalkToCustomer(customerId) {
+async function handleTalkToCustomer(customerId) {
   const session = supervisorState.customerSessions[customerId];
-  const targetPeerId = session && session.peerId;
-  
-  if (!targetPeerId) {
-    showToast('ERR', 'Customer not available for voice call.');
+  const peerId = getCustomerPeerIdForCall(session);
+
+  if (!peerId) {
+    console.warn('[peerjs] cannot call customer: missing peerId');
     return;
   }
-  
-  if (!isPeerConnected()) {
-    initPeerJS();
+
+  try {
+    await window.NexaPeerCalling.callCustomerPeer(peerId);
+  } catch (err) {
+    console.error('[peerjs] failed to call customer:', err);
   }
-  
-  supervisorState.activeCallCustomerId = customerId;
-  startPeerCall(targetPeerId);
 }
 
 function setCallingState(isCalling) {
   const btns = document.querySelectorAll('.talk-to-customer-btn');
   btns.forEach(function(btn) {
-    const customerId = btn.dataset.customerId;
-    if (isCalling) {
-      if (supervisorState.activeCallCustomerId === customerId) {
-        btn.textContent = 'End Call';
-        btn.classList.add('active-call');
-        btn.disabled = false;
-      } else {
-        btn.disabled = true;
-      }
-    } else {
-      btn.textContent = 'Talk to Customer';
-      btn.classList.remove('calling', 'active-call');
-      supervisorState.activeCallCustomerId = null;
-      btn.disabled = determineTalkButtonState(customerId);
-    }
+    btn.textContent = 'Talk to Customer';
+    btn.classList.toggle('active-call', !!isCalling && !btn.disabled);
   });
+  if (!isCalling) supervisorState.activeCallCustomerId = null;
+  updateTalkButtonStates();
 }
 
 function updateCustomerSession(customerId, data) {
   if (!supervisorState.customerSessions[customerId]) {
     supervisorState.customerSessions[customerId] = { id: customerId };
   }
-  
+
   const session = supervisorState.customerSessions[customerId];
-  
+
   // Update status based on heartbeat
   if (data.heartbeatAt) {
     const isOnline = data.heartbeatAt && (Date.now() - data.heartbeatAt) < 15000;
     session.status = isOnline ? 'online' : 'offline';
+    session.online = isOnline;
   }
-  
+
+  session.peerId = data.peerId || session.peerId || null;
+  session.online = data.online === true || data.status === 'online' || data.connected === true || session.online === true;
+
   // Store peerId for calls
   if (data.peerId) {
     session.peerId = data.peerId;
   }
-  
+
   // Update speaking/thinking state
   if (typeof data.isSpeaking !== 'undefined') {
     session.isSpeaking = data.isSpeaking;
@@ -121,13 +135,14 @@ function updateCustomerSession(customerId, data) {
 function updateTalkButtonStates() {
   const btns = document.querySelectorAll('.talk-to-customer-btn');
   btns.forEach(function(btn) {
-    const customerId = btn.dataset.customerId;
-    if (supervisorState.activeCallCustomerId && supervisorState.activeCallCustomerId !== customerId) {
-      // Another call is active
-      btn.disabled = true;
-    } else {
-      btn.disabled = determineTalkButtonState(customerId);
-    }
+    const column = btn.closest('.supervisor-column');
+    const columns = Array.from(document.querySelectorAll('.supervisor-column'));
+    const customerId = columns.indexOf(column) === 1 ? 'customer2' : 'customer1';
+    const item = supervisorState.customerSessions[customerId] || {};
+    const peerId = getCustomerPeerIdForCall(item);
+    const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId;
+    btn.dataset.peerId = peerId;
+    btn.disabled = !canTalk;
   });
 }
 

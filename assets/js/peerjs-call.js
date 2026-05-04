@@ -14,7 +14,9 @@
     if (!window.S.peer) {
       window.S.peer = {
         id: null,
-        connected: false
+        connected: false,
+        ready: false,
+        lastError: null
       };
     }
     return window.S.peer;
@@ -43,6 +45,50 @@
       peerState.id = window.createNexaPeerId(role);
     }
     return peerState.id;
+  }
+
+  function writePeerIdIntoKnownState(peerId) {
+    const role = getRole();
+
+    if (!window.S) window.S = {};
+
+    if (role === 'customer') {
+      if (!window.S.customerSession || typeof window.S.customerSession !== 'object') {
+        window.S.customerSession = {};
+      }
+      window.S.customerSession.peerId = peerId;
+      window.S.customerSession.online = true;
+
+      if (!window.S.currentCustomer || typeof window.S.currentCustomer !== 'object') {
+        window.S.currentCustomer = {};
+      }
+      window.S.currentCustomer.peerId = peerId;
+      window.S.currentCustomer.online = true;
+
+      if (window.S.session && typeof window.S.session === 'object') {
+        window.S.session.peerId = peerId;
+        window.S.session.online = true;
+      }
+    }
+
+    if (role === 'supervisor') {
+      if (!window.S.supervisorSession || typeof window.S.supervisorSession !== 'object') {
+        window.S.supervisorSession = {};
+      }
+      window.S.supervisorSession.peerId = peerId;
+      window.S.supervisorSession.online = true;
+    }
+  }
+
+  function broadcastPeerPresence(peerId) {
+    document.dispatchEvent(new CustomEvent('nexa:peer-presence-updated', {
+      detail: {
+        role: getRole(),
+        peerId,
+        connected: true,
+        online: true
+      }
+    }));
   }
 
   function attachIncomingCallHandler(peer) {
@@ -76,43 +122,13 @@
     audio.srcObject = stream;
   }
 
-  function upsertOwnPeerIdIntoSharedState() {
-    const peerId = getMyPeerId();
-    const role = getRole();
-
-    if (window.S) {
-      if (role === 'customer') {
-        if (!window.S.customerSession || typeof window.S.customerSession !== 'object') {
-          window.S.customerSession = {};
-        }
-        window.S.customerSession.peerId = peerId;
-
-        if (!window.S.currentCustomer || typeof window.S.currentCustomer !== 'object') {
-          window.S.currentCustomer = {};
-        }
-        window.S.currentCustomer.peerId = peerId;
-
-        if (window.S.session && typeof window.S.session === 'object') {
-          window.S.session.peerId = peerId;
-        }
-      }
-
-      if (role === 'supervisor' && window.S.supervisorSession && typeof window.S.supervisorSession === 'object') {
-        window.S.supervisorSession.peerId = peerId;
-      }
-    }
-
-    document.dispatchEvent(new CustomEvent('nexa:peer-id-ready', {
-      detail: { peerId, role }
-    }));
-  }
-
   async function initPeerCalling() {
     ensurePeerLibraryLoaded();
 
     if (peerInstance) return peerInstance;
 
     const myPeerId = getMyPeerId();
+    const peerState = getPeerState();
 
     peerInstance = new window.Peer(myPeerId, {
       host: window.NEXA_PEERJS.host,
@@ -120,24 +136,29 @@
       path: window.NEXA_PEERJS.path,
       key: window.NEXA_PEERJS.key,
       secure: window.NEXA_PEERJS.secure,
-      config: { iceServers: window.NEXA_PEERJS.iceServers }
+      config: { iceServers: window.NEXA_PEERJS.iceServers },
+      debug: 2
     });
 
     peerInstance.on('open', () => {
-      getPeerState().connected = true;
-      upsertOwnPeerIdIntoSharedState();
-      document.dispatchEvent(new CustomEvent('nexa:peer-presence-updated', {
-        detail: { peerId: myPeerId, role: getRole() }
-      }));
+      peerState.connected = true;
+      peerState.ready = true;
+      peerState.lastError = null;
+
+      writePeerIdIntoKnownState(myPeerId);
+      broadcastPeerPresence(myPeerId);
+
       console.log('[peerjs] connected as', myPeerId);
     });
 
     peerInstance.on('error', (err) => {
+      peerState.lastError = err ? String(err.message || err) : 'unknown';
       console.error('[peerjs] error:', err);
     });
 
     peerInstance.on('disconnected', () => {
-      getPeerState().connected = false;
+      peerState.connected = false;
+      peerState.ready = false;
     });
 
     attachIncomingCallHandler(peerInstance);
@@ -150,6 +171,12 @@
     }
 
     const peer = await initPeerCalling();
+    const peerState = getPeerState();
+
+    if (!peerState.ready) {
+      throw new Error('PeerJS connection is not ready yet');
+    }
+
     const stream = await getLocalAudioStream();
     const call = peer.call(customerPeerId, stream);
 
@@ -161,6 +188,10 @@
 
     call.on('close', () => {
       activeCall = null;
+    });
+
+    call.on('error', (err) => {
+      console.error('[peerjs] call failed:', err);
     });
 
     return call;
