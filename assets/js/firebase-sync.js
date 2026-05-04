@@ -11,6 +11,7 @@ const STALE_LOCK_MS = 30000;
 const PRESENCE_STALE_MS = 15000;
 const SUPERVISOR_PRESENCE_MONITOR_MS = 3000;
 let supervisorPresenceMonitorId = null;
+let activeSupervisorCallCustomerId = null;
 // Tracks previous online/offline state per customer for supervisor status log entries
 const _customerOnlineState = {};
 // Tracks peer IDs for each customer session (used by supervisor for P2P calls)
@@ -26,6 +27,35 @@ function getCustomerPeerIdForCall(item) {
     item.sessionPeerId ||
     ''
   ).trim();
+}
+
+function getCustomerIdFromTalkButton(button) {
+  if (!button) return '';
+  const fromDataset = String(button.dataset.customerId || '').trim();
+  if (fromDataset) return fromDataset;
+
+  const column = button.closest('.supervisor-column');
+  const columns = Array.from(document.querySelectorAll('.supervisor-column'));
+  return columns.indexOf(column) === 1 ? 'customer2' : 'customer1';
+}
+
+function isSupervisorCallActiveFor(customerId) {
+  return !!activeSupervisorCallCustomerId && activeSupervisorCallCustomerId === customerId;
+}
+
+function isSupervisorCallBlocking(customerId) {
+  return !!activeSupervisorCallCustomerId && activeSupervisorCallCustomerId !== customerId;
+}
+
+function setActiveSupervisorCallCustomer(customerId) {
+  activeSupervisorCallCustomerId = customerId || null;
+  document.dispatchEvent(new CustomEvent('nexa:supervisor-call-state-changed', {
+    detail: {
+      active: !!activeSupervisorCallCustomerId,
+      customerId: activeSupervisorCallCustomerId
+    }
+  }));
+  renderSupervisorCustomers();
 }
 
 function isCustomerOnlineForPeerCall(item) {
@@ -284,15 +314,17 @@ function applyCustomerSnapshot(customerId, data) {
         online: data.online === true || _customerOnlineState[customerId] === true
       });
       const peerId = getCustomerPeerIdForCall(item);
-      const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId;
+      const isActiveCall = isSupervisorCallActiveFor(customerId);
+      const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId && !activeSupervisorCallCustomerId;
       const talkButtonMarkup =
         '<button\n' +
-        '  class="talk-to-customer-btn"\n' +
+        '  class="talk-to-customer-btn' + (isActiveCall ? ' active-call' : '') + '"\n' +
         '  type="button"\n' +
+        '  data-customer-id="' + customerId + '"\n' +
         '  data-peer-id="' + peerId + '"\n' +
         '  ' + (canTalk ? '' : 'disabled') + '\n' +
         '>\n' +
-        '  Talk to Customer\n' +
+        '  ' + (isActiveCall ? 'On call' : 'Talk to Customer') + '\n' +
         '</button>';
       const talkBtn = columnEl.querySelector('.talk-to-customer-btn');
       if (!talkBtn) {
@@ -357,15 +389,17 @@ function renderSupervisorCustomers() {
       online: _customerOnlineState[customerId] === true
     };
     const peerId = getCustomerPeerIdForCall(item);
-    const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId;
+    const isActiveCall = isSupervisorCallActiveFor(customerId);
+    const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId && !activeSupervisorCallCustomerId;
     const talkButtonMarkup =
       '<button\n' +
-      '  class="talk-to-customer-btn"\n' +
+      '  class="talk-to-customer-btn' + (isActiveCall ? ' active-call' : '') + '"\n' +
       '  type="button"\n' +
+      '  data-customer-id="' + customerId + '"\n' +
       '  data-peer-id="' + peerId + '"\n' +
       '  ' + (canTalk ? '' : 'disabled') + '\n' +
       '>\n' +
-      '  Talk to Customer\n' +
+      '  ' + (isActiveCall ? 'On call' : 'Talk to Customer') + '\n' +
       '</button>';
     const talkBtn = columnEl.querySelector('.talk-to-customer-btn');
 
@@ -377,6 +411,24 @@ function renderSupervisorCustomers() {
       talkBtn.outerHTML = talkButtonMarkup;
     }
   });
+}
+
+function appendSupervisorInterventionLog(customerId) {
+  const isC1 = customerId === 'customer1';
+  const logEl = document.getElementById(isC1 ? 'sup1Log' : 'sup2Log');
+  if (!logEl) return;
+
+  const ts = new Date().toLocaleTimeString('en-IN', { hour12: false });
+  const div = document.createElement('div');
+  div.className = 'entry action sup-intervention-event';
+  div.innerHTML =
+    '<div class="eicon action">⚡</div>' +
+    '<div class="ebody"><div class="emeta">' +
+    '<span class="ewho action">ACTION</span>' +
+    '<span class="etime">' + ts + '</span></div>' +
+    '<div class="emsg">Supervisor decided to intervene and started a live call.</div></div>';
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
 }
 
 function refreshSupervisorPresenceFromSnapshots() {
@@ -817,6 +869,9 @@ if (typeof window !== 'undefined') {
   window.clearCustomerLog = clearCustomerLog;
   window.refreshCustomerLockTimestamp = refreshCustomerLockTimestamp;
   window.renderSupervisorCustomers = renderSupervisorCustomers;
+  window.getActiveSupervisorCallCustomerId = function() {
+    return activeSupervisorCallCustomerId;
+  };
   window.getCustomerPeerId = function(customerId) {
     return _customerPeerIds[customerId] || null;
   };
@@ -826,17 +881,41 @@ if (typeof window !== 'undefined') {
     const button = event.target.closest('.talk-to-customer-btn');
     if (!button) return;
 
+    const customerId = getCustomerIdFromTalkButton(button);
     const peerId = String(button.dataset.peerId || '').trim();
     if (!peerId) {
       console.warn('[peerjs] cannot call customer: missing peerId');
       return;
     }
 
+    if (activeSupervisorCallCustomerId) {
+      console.warn('[peerjs] cannot start another customer call while a call is active');
+      return;
+    }
+
+    setActiveSupervisorCallCustomer(customerId);
+    appendSupervisorInterventionLog(customerId);
+
     try {
-      await window.NexaPeerCalling.callCustomerPeer(peerId);
+      const call = await window.NexaPeerCalling.callCustomerPeer(peerId);
+      if (call && typeof call.on === 'function') {
+        call.on('close', function() {
+          setActiveSupervisorCallCustomer(null);
+        });
+        call.on('error', function() {
+          setActiveSupervisorCallCustomer(null);
+        });
+      }
     } catch (err) {
+      setActiveSupervisorCallCustomer(null);
       console.error('[peerjs] failed to call customer:', err);
     }
+  });
+
+  document.addEventListener('nexa:peer-call-state-changed', function(event) {
+    const detail = event.detail || {};
+    if (S.role !== 'supervisor' || detail.active !== false) return;
+    setActiveSupervisorCallCustomer(null);
   });
 
   document.addEventListener('nexa:peer-presence-updated', function (event) {

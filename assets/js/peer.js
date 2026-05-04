@@ -166,5 +166,7 @@
   window.getMyPeerId = getMyPeerId;
   window.initPeerJS = initPeerJS;
   window.cleanupPeerJS = cleanup;
-  window.setPeerCallActive = null;
+  if (typeof window.setPeerCallActive !== 'function') {
+    window.setPeerCallActive = function() {};
+  }
 })();

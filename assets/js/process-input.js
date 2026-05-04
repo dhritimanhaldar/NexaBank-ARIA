@@ -227,6 +227,12 @@ function speakPendingResponse(rawText, spoken, detailText){
   setStatus('thinking','THINKING');
   setOrbSpin(false);
   setTimeout(() => {
+    if (S.peerCallActive) {
+      showThinking(false);
+      S.isThinking = false;
+      if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
+      return;
+    }
     showThinking(false);
     S.isThinking = false;
     addLog('aria','ARIA',spoken);
@@ -241,6 +247,17 @@ function processInput(text){
 
   const rawText = String(text || '').trim();
   if(!rawText) return;
+
+  if(S.peerCallActive){
+    if(typeof window.logPeerCallTranscript === 'function') {
+      window.logPeerCallTranscript(rawText);
+    } else {
+      DOM.transcriptText.textContent = rawText;
+      addLog('user','Customer',rawText);
+      if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
+    }
+    return;
+  }
 
   if(/\b(my pin is|my password is|secure key is|my code is|my secret is)\b|\b\d{6,8}\b/.test(rawText.toLowerCase())) return;   const parsed0 = NLP.classify(rawText);   if(parsed0.intent === 'end_session'){     addLog('user','You',rawText);     const spoken = 'Of course. Thank you for banking with HSBC. Have a great day! Ending your session now.';     addLog('aria','ARIA',spoken);     if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();     speak(spoken, function(){ if(typeof endSession === 'function') endSession(); });     return;   }
 
@@ -353,6 +370,12 @@ function processInput(text){
   setOrbSpin(false);
 
   setTimeout(()=>{
+    if (S.peerCallActive) {
+      showThinking(false);
+      S.isThinking = false;
+      if(S.role === 'customer' && typeof publishLiveSnapshot === 'function') publishLiveSnapshot();
+      return;
+    }
     const r = respond(rawText);
     showThinking(false);
     S.isThinking = false;

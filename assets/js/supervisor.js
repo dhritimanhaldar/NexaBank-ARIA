@@ -63,15 +63,17 @@ function initSupervisorUI() {
     if (h3) {
       const item = supervisorState.customerSessions[customerId] || {};
       const peerId = getCustomerPeerIdForCall(item);
-      const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId;
+      const isActiveCall = supervisorState.activeCallCustomerId === customerId;
+      const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId && !supervisorState.activeCallCustomerId;
       const talkButtonMarkup =
         '<button\n' +
-        '  class="talk-to-customer-btn"\n' +
+        '  class="talk-to-customer-btn' + (isActiveCall ? ' active-call' : '') + '"\n' +
         '  type="button"\n' +
+        '  data-customer-id="' + customerId + '"\n' +
         '  data-peer-id="' + peerId + '"\n' +
         '  ' + (canTalk ? '' : 'disabled') + '\n' +
         '>\n' +
-        '  Talk to Customer\n' +
+        '  ' + (isActiveCall ? 'On call' : 'Talk to Customer') + '\n' +
         '</button>';
       const existingBtn = col.querySelector('.talk-to-customer-btn');
 
@@ -91,7 +93,7 @@ function determineTalkButtonState(customerId) {
   if (!session) return true;
 
   const peerId = getCustomerPeerIdForCall(session);
-  const canTalk = isCustomerOnlineForPeerCall(session) && !!peerId;
+  const canTalk = isCustomerOnlineForPeerCall(session) && !!peerId && !supervisorState.activeCallCustomerId;
   return !canTalk;
 }
 
@@ -105,19 +107,33 @@ async function handleTalkToCustomer(customerId) {
   }
 
   try {
-    await window.NexaPeerCalling.callCustomerPeer(peerId);
+    setCallingState(true, customerId);
+    const call = await window.NexaPeerCalling.callCustomerPeer(peerId);
+    if (call && typeof call.on === 'function') {
+      call.on('close', function() {
+        setCallingState(false);
+      });
+      call.on('error', function() {
+        setCallingState(false);
+      });
+    }
   } catch (err) {
+    setCallingState(false);
     console.error('[peerjs] failed to call customer:', err);
   }
 }
 
-function setCallingState(isCalling) {
+function setCallingState(isCalling, customerId) {
+  if (isCalling && customerId) supervisorState.activeCallCustomerId = customerId;
+  if (!isCalling) supervisorState.activeCallCustomerId = null;
+
   const btns = document.querySelectorAll('.talk-to-customer-btn');
   btns.forEach(function(btn) {
-    btn.textContent = 'Talk to Customer';
-    btn.classList.toggle('active-call', !!isCalling && !btn.disabled);
+    const buttonCustomerId = getCustomerIdForButton(btn);
+    const isActiveButton = !!isCalling && supervisorState.activeCallCustomerId === buttonCustomerId;
+    btn.textContent = isActiveButton ? 'On call' : 'Talk to Customer';
+    btn.classList.toggle('active-call', isActiveButton);
   });
-  if (!isCalling) supervisorState.activeCallCustomerId = null;
   updateTalkButtonStates();
 }
 
@@ -161,15 +177,26 @@ function updateCustomerSession(customerId, data) {
 function updateTalkButtonStates() {
   const btns = document.querySelectorAll('.talk-to-customer-btn');
   btns.forEach(function(btn) {
-    const column = btn.closest('.supervisor-column');
-    const columns = Array.from(document.querySelectorAll('.supervisor-column'));
-    const customerId = columns.indexOf(column) === 1 ? 'customer2' : 'customer1';
+    const customerId = getCustomerIdForButton(btn);
     const item = supervisorState.customerSessions[customerId] || {};
     const peerId = getCustomerPeerIdForCall(item);
-    const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId;
+    const isActiveButton = supervisorState.activeCallCustomerId === customerId;
+    const canTalk = isCustomerOnlineForPeerCall(item) && !!peerId && !supervisorState.activeCallCustomerId;
+    btn.classList.toggle('active-call', isActiveButton);
+    btn.textContent = isActiveButton ? 'On call' : 'Talk to Customer';
+    btn.dataset.customerId = customerId;
     btn.dataset.peerId = peerId;
     btn.disabled = !canTalk;
   });
+}
+
+function getCustomerIdForButton(button) {
+  const fromDataset = String(button?.dataset?.customerId || '').trim();
+  if (fromDataset) return fromDataset;
+
+  const column = button?.closest?.('.supervisor-column');
+  const columns = Array.from(document.querySelectorAll('.supervisor-column'));
+  return columns.indexOf(column) === 1 ? 'customer2' : 'customer1';
 }
 
 // Hook into applyCustomerSnapshot to update supervisor state
@@ -189,6 +216,12 @@ if (document.readyState === 'loading') {
 } else {
   initSupervisorUI();
 }
+
+document.addEventListener('nexa:supervisor-call-state-changed', function(event) {
+  const detail = event.detail || {};
+  supervisorState.activeCallCustomerId = detail.active ? detail.customerId : null;
+  updateTalkButtonStates();
+});
 
 // Export functions to window
 window.setCallingState = setCallingState;

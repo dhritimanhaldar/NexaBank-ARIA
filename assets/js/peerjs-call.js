@@ -91,17 +91,57 @@
     }));
   }
 
+  function setPeerCallState(active, detail = {}) {
+    if (typeof window.setPeerCallActive === 'function') {
+      window.setPeerCallActive(active, detail);
+    }
+
+    document.dispatchEvent(new CustomEvent('nexa:peer-call-state-changed', {
+      detail: {
+        active: !!active,
+        role: getRole(),
+        peerId: detail.peerId || null,
+        direction: detail.direction || null
+      }
+    }));
+  }
+
+  function logSupervisorIntervention() {
+    if (getRole() !== 'customer' || typeof window.addLog !== 'function') return;
+    addLog('action', 'ACTION', 'Supervisor decided to intervene and started a live call.');
+  }
+
+  function markCallActive(call, detail) {
+    activeCall = call;
+    setPeerCallState(true, detail);
+  }
+
+  function markCallEnded(call, detail) {
+    if (!activeCall || activeCall === call) {
+      activeCall = null;
+      setPeerCallState(false, detail);
+    }
+  }
+
   function attachIncomingCallHandler(peer) {
     peer.on('call', async (call) => {
       try {
         const stream = await getLocalAudioStream();
-        activeCall = call;
+        if (activeCall && activeCall !== call) {
+          activeCall.close();
+        }
+        markCallActive(call, { direction: 'incoming', peerId: call.peer });
+        logSupervisorIntervention();
         call.answer(stream);
         call.on('stream', (remoteStream) => {
           playRemoteAudio(remoteStream);
         });
         call.on('close', () => {
-          activeCall = null;
+          markCallEnded(call, { direction: 'incoming', peerId: call.peer });
+        });
+        call.on('error', (err) => {
+          console.error('[peerjs] incoming call failed:', err);
+          markCallEnded(call, { direction: 'incoming', peerId: call.peer });
         });
       } catch (err) {
         console.error('[peerjs] failed to answer incoming call:', err);
@@ -178,20 +218,24 @@
     }
 
     const stream = await getLocalAudioStream();
+    if (activeCall) {
+      activeCall.close();
+    }
     const call = peer.call(customerPeerId, stream);
 
-    activeCall = call;
+    markCallActive(call, { direction: 'outgoing', peerId: customerPeerId });
 
     call.on('stream', (remoteStream) => {
       playRemoteAudio(remoteStream);
     });
 
     call.on('close', () => {
-      activeCall = null;
+      markCallEnded(call, { direction: 'outgoing', peerId: customerPeerId });
     });
 
     call.on('error', (err) => {
       console.error('[peerjs] call failed:', err);
+      markCallEnded(call, { direction: 'outgoing', peerId: customerPeerId });
     });
 
     return call;

@@ -5,9 +5,53 @@ let currentCustomerPeerId = null;
 const SILENCE_TIMEOUT_MS = 5000;
 const MAX_LISTEN_MS = 120000;
 const MIN_TRANSCRIPT_LENGTH = 2;
+const ARIA_ECHO_GRACE_MS = 1800;
 
 function hasMeaningfulTranscript(text) {
   return typeof text === 'string' && text.trim().replace(/\s+/g, ' ').length >= MIN_TRANSCRIPT_LENGTH;
+}
+
+function normalizeTranscriptForCompare(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isLikelyAriaEcho(text) {
+  if (!text || !S.lastAriaSpeechText) return false;
+  if (S.isSpeaking) return true;
+
+  const endedAt = Number(S.lastAriaSpeechEndedAt || 0);
+  if (!endedAt || (Date.now() - endedAt) > ARIA_ECHO_GRACE_MS) return false;
+
+  const heard = normalizeTranscriptForCompare(text);
+  const spoken = normalizeTranscriptForCompare(S.lastAriaSpeechText);
+  if (!heard || !spoken) return false;
+  if (spoken.includes(heard) || heard.includes(spoken)) return true;
+
+  const heardWords = heard.split(' ').filter(word => word.length > 2);
+  if (!heardWords.length) return false;
+
+  const spokenWordSet = new Set(spoken.split(' ').filter(word => word.length > 2));
+  const overlap = heardWords.filter(word => spokenWordSet.has(word)).length / heardWords.length;
+  return overlap >= 0.75;
+}
+
+function logPeerCallTranscript(text) {
+  const cleaned = String(text || '').trim();
+  if (!hasMeaningfulTranscript(cleaned)) return false;
+
+  if (DOM?.transcriptText) DOM.transcriptText.textContent = cleaned;
+  addLog('user', 'Customer', cleaned);
+  if (S.role === 'customer' && typeof publishLiveSnapshot === 'function') {
+    publishLiveSnapshot({
+      peerCallActive: true,
+      lastCallTranscriptAt: Date.now()
+    });
+  }
+  return true;
 }
 
 function startSilenceTimeout(recognition, onSilenceStop) {
@@ -120,7 +164,6 @@ function scheduleAutoListen(delay=1000){
 
 function startListening(){
   if(S.role === 'supervisor') return;
-  if(inPeerCallMode) return;
   if(!S.micReady||S.isMuted||S.isThinking||S.isSpeaking||appState.recognitionActive) return;
   S.pendingFinal = '';
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -140,7 +183,10 @@ function startListening(){
   setListeningUi(true, 'Listening…');
   function stopSession(reason='manual-stop') { stopReason = reason; stopRecognitionSession(rec, reason); }
   rec.onresult=(e)=>{
-    if(S.isSpeaking){ cancelSpeech(); }
+    if(S.isSpeaking && !inPeerCallMode){
+      S.pendingFinal = '';
+      return;
+    }
     let transcript='';
     let interim='';
     for(let i=e.resultIndex;i<e.results.length;i++){
@@ -165,7 +211,17 @@ function startListening(){
           setListeningUi(false, 'No speech detected, stopped listening.');
         }
         const final = (S.pendingFinal+' '+interim).trim();
-        if(final.length>1){ restartAllowed=false; processInput(final); }
+        if(isLikelyAriaEcho(final)){
+          S.pendingFinal = '';
+          restartAllowed = true;
+          if (DOM?.transcriptText) DOM.transcriptText.textContent = 'Listening…';
+        }
+        else if(final.length>1 && (inPeerCallMode || S.peerCallActive)){
+          logPeerCallTranscript(final);
+          S.pendingFinal = '';
+          restartAllowed = true;
+        }
+        else if(final.length>1){ restartAllowed=false; processInput(final); }
         else { S.pendingFinal=''; DOM.transcriptText.textContent='Listening…'; }
       });
     }
@@ -304,12 +360,16 @@ function runHint(t){
 
 function speak(text){
   if(S.role === 'supervisor') return;
+  if(S.peerCallActive) return;
   if(!window.speechSynthesis){
     scheduleAutoListen();
     return;
   }
   cancelSpeech(); // clear any prior utterance
   S.isSpeaking=true;
+  S.lastAriaSpeechText = String(text || '');
+  S.lastAriaSpeechStartedAt = Date.now();
+  S.lastAriaSpeechEndedAt = 0;
   setStatus('speaking','SPEAKING');
   DOM.ring1.className='orb-ring speak';
   DOM.ring2.className='orb-ring2 speak';
@@ -327,6 +387,7 @@ function speak(text){
 
   u.onend=()=>{
     S.isSpeaking=false;
+    S.lastAriaSpeechEndedAt = Date.now();
     DOM.ring1.className='orb-ring';
     DOM.ring2.className='orb-ring2';
     DOM.orbFace.textContent='🤖';
@@ -339,6 +400,7 @@ function speak(text){
   u.onerror=(e)=>{
     if(e.error==='interrupted') return; // user barged in — OK
     S.isSpeaking=false;
+    S.lastAriaSpeechEndedAt = Date.now();
     DOM.ring1.className='orb-ring';
     DOM.ring2.className='orb-ring2';
     DOM.orbFace.textContent='🤖';
@@ -352,6 +414,7 @@ function speak(text){
   const fallback=setTimeout(()=>{
     if(S.isSpeaking){
       S.isSpeaking=false;
+      S.lastAriaSpeechEndedAt = Date.now();
       DOM.ring1.className='orb-ring';
       DOM.ring2.className='orb-ring2';
       DOM.orbFace.textContent='🤖';
@@ -397,6 +460,23 @@ window.toggleMute = toggleMute;
 window.sendManual = sendManual;
 window.runHint = runHint;
 window.speak = speak;
-window.setPeerCallActive = function(active) {
+window.logPeerCallTranscript = logPeerCallTranscript;
+window.setPeerCallActive = function(active, detail = {}) {
   inPeerCallMode = !!active;
+  currentCustomerPeerId = active ? (detail.peerId || currentCustomerPeerId) : null;
+  S.peerCallActive = inPeerCallMode;
+  S.activePeerCallId = currentCustomerPeerId;
+
+  if (inPeerCallMode) {
+    if (typeof cancelSpeech === 'function') cancelSpeech();
+    S.isSpeaking = false;
+    S.isThinking = false;
+    if (typeof showThinking === 'function') showThinking(false);
+    if (typeof setListeningUi === 'function') setListeningUi(false, 'Supervisor call active. Live transcript only.');
+    if (!S.isMuted && S.micReady) scheduleAutoListen(250);
+  } else {
+    if (typeof setStatus === 'function') setStatus('live', 'READY');
+    if (!S.isMuted && S.micReady) scheduleAutoListen(800);
+  }
+  updateMicBtn();
 };
