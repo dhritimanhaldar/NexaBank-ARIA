@@ -1,3 +1,7 @@
+// Peer call state flags
+let inPeerCallMode = false;
+let currentCustomerPeerId = null;
+
 const SILENCE_TIMEOUT_MS = 5000;
 const MAX_LISTEN_MS = 120000;
 const MIN_TRANSCRIPT_LENGTH = 2;
@@ -116,57 +120,43 @@ function scheduleAutoListen(delay=1000){
 
 function startListening(){
   if(S.role === 'supervisor') return;
+  if(inPeerCallMode) return;
   if(!S.micReady||S.isMuted||S.isThinking||S.isSpeaking||appState.recognitionActive) return;
   S.pendingFinal = '';
-
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ showToast('ERR','Speech API not supported. Use Chrome.'); return; }
-
   resetSpeechFlags();
   clearRecognitionTimers();
   setListening(true);
-
   const rec=new SR();
   S.recognition=rec;
   rec.continuous=true;
   rec.interimResults=true;
   rec.lang='en-IN';
   rec.maxAlternatives=1;
-
   let stopReason = null;
   let restartAllowed=true;
-
   DOM.transcriptText.textContent='Listening…';
   setListeningUi(true, 'Listening…');
-
-  function stopSession(reason='manual-stop') {
-    stopReason = reason;
-    stopRecognitionSession(rec, reason);
-  }
-
+  function stopSession(reason='manual-stop') { stopReason = reason; stopRecognitionSession(rec, reason); }
   rec.onresult=(e)=>{
-    if(S.isSpeaking){
-      cancelSpeech();
-    }
-
+    if(S.isSpeaking){ cancelSpeech(); }
     let transcript='';
     let interim='';
     for(let i=e.resultIndex;i<e.results.length;i++){
       const result=e.results[i];
       if(!result||!result[0]) continue;
-      transcript += result[0].transcript || '';
+      transcript+=result[0].transcript||'';
       if(result.isFinal){
         S.pendingFinal=(S.pendingFinal+' '+result[0].transcript).trim();
       } else {
-        interim = result[0].transcript || interim;
+        interim=result[0].transcript||interim;
       }
     }
-
     const cleanedTranscript = transcript.trim();
     const display = (S.pendingFinal+' '+interim).trim();
     if(display) DOM.transcriptText.textContent = display;
-
-    if((cleanedTranscript + interim).trim().length > 0){
+    if((cleanedTranscript+interim).trim().length>0){
       appState.hasDetectedSpeech = true;
       S.vadSpeechDetected=true;
       S.vadSilenceStart=null;
@@ -175,63 +165,28 @@ function startListening(){
           setListeningUi(false, 'No speech detected, stopped listening.');
         }
         const final = (S.pendingFinal+' '+interim).trim();
-        if(final.length>1){
-          restartAllowed=false;
-          processInput(final);
-        } else {
-          S.pendingFinal='';
-          DOM.transcriptText.textContent='Listening…';
-        }
+        if(final.length>1){ restartAllowed=false; processInput(final); }
+        else { S.pendingFinal=''; DOM.transcriptText.textContent='Listening…'; }
       });
     }
   };
-
-  // onspeechend removed: it was clearing the silence timeout before processInput could fire.
-  // The silence timeout (2000ms) now has exclusive responsibility for triggering processInput.
-
   rec.onerror=(e)=>{
     console.warn('[mic] recognition error', e?.error || e);
     clearRecognitionTimers();
     setListening(false);
-    if(typeof setListeningUi === 'function'){
-      setListeningUi(false,'Microphone idle.');
-    }
-    if(!S.isThinking && !S.isSpeaking && !S.isMuted && S.micReady){
-      scheduleAutoListen(1500);
-    }
+    if(typeof setListeningUi === 'function'){ setListeningUi(false,'Microphone idle.'); }
+    if(!S.isThinking && !S.isSpeaking && !S.isMuted && S.micReady){ scheduleAutoListen(1500); }
   };
-
   rec.onend=()=>{
     console.log('[mic] recognition ended');
     clearRecognitionTimers();
     setListening(false);
-    if(typeof setListeningUi === 'function'){
-      if(stopReason !== 'silence-timeout'){
-        setListeningUi(false,'Microphone idle.');
-      }
-    }
+    if(typeof setListeningUi === 'function'){ if(stopReason !== 'silence-timeout'){ setListeningUi(false,'Microphone idle.'); } }
     updateMicBtn();
-    // If processInput was never called this session (restartAllowed still true),
-    // schedule a new listen so the mic does not go permanently silent.
-    if(restartAllowed && !S.isThinking && !S.isSpeaking && !S.isMuted && S.micReady){
-      scheduleAutoListen(500);
-    }
+    if(restartAllowed && !S.isThinking && !S.isSpeaking && !S.isMuted && S.micReady){ scheduleAutoListen(500); }
   };
-
-  try{
-    rec.start();
-    console.log('[mic] recognition started');
-    startSilenceTimeout(rec, () => {
-      if(typeof setListeningUi === 'function'){
-        setListeningUi(false,'No speech detected, stopped listening.');
-      }
-    });
-    startMaxListenTimeout(rec);
-  } catch(err){
-    setListening(false);
-    addLog('error','ERROR','Cannot start recognition: '+err.message);
-    updateMicBtn();
-  }
+  try{ rec.start(); console.log('[mic] recognition started'); startSilenceTimeout(rec, () => { if(typeof setListeningUi === 'function'){ setListeningUi(false,'No speech detected, stopped listening.'); } }); startMaxListenTimeout(rec); }
+  catch(err){ setListening(false); addLog('error','ERROR','Cannot start recognition: '+err.message); updateMicBtn(); }
 }
 
 function stopListening(silent=false){
@@ -442,3 +397,6 @@ window.toggleMute = toggleMute;
 window.sendManual = sendManual;
 window.runHint = runHint;
 window.speak = speak;
+window.setPeerCallActive = function(active) {
+  inPeerCallMode = !!active;
+};

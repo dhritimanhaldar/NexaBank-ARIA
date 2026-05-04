@@ -13,7 +13,8 @@
 <link rel="stylesheet" href="assets/css/components.css">
 <link rel="stylesheet" href="assets/css/states.css">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script><script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script><script>
   window.NEXA_FIREBASE_CONFIG = {
     apiKey: "AIzaSyBzD_qC2GStD36bovs341IULT69VVtTaPI",
     authDomain: "nexabank-aria.firebaseapp.com",
@@ -232,12 +233,17 @@
 <script src="assets/js/nlp.js"></script>
 <script src="assets/js/intents.js"></script>
 <script src="assets/js/process-input.js"></script>
+<script src="assets/js/peerjs-config.js"></script>
 <script src="assets/js/mic.js"></script>
+<script src="assets/js/peer.js"></script>
 <script src="assets/js/session-store.js"></script>
 <script src="assets/js/firebase-sync.js"></script>
 <script src="assets/js/role-gate.js"></script>
+<script src="assets/js/supervisor.js"></script>
 <script src="assets/js/globals.js"></script>
 <script src="assets/js/app-init.js"></script>
+<!-- Peer call audio element -->
+<audio id="peer-call-audio" style="display:none"></audio>
 <div id="toast" class="toast"></div>
 </body>
 </html>

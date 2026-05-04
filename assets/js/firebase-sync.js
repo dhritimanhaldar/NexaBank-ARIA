@@ -10,6 +10,8 @@ let heartbeatIntervalId = null;
 const STALE_LOCK_MS = 30000;
 // Tracks previous online/offline state per customer for supervisor status log entries
 const _customerOnlineState = {};
+// Tracks peer IDs for each customer session (used by supervisor for P2P calls)
+const _customerPeerIds = {};
 
 function logSyncInfo(message, extra) {
   if (typeof extra !== 'undefined') {
@@ -135,6 +137,12 @@ function getLocalChannel() {
 function applyCustomerSnapshot(customerId, data) {
   if (!data) return;
 
+  // Store peerId for this customer so supervisor can initiate calls
+  if (data.peerId) {
+    _customerPeerIds[customerId] = data.peerId;
+    console.log('[NexaBank] Stored peerId for', customerId, ':', data.peerId);
+  }
+
   const isC1 = customerId === 'customer1';
   const logEl      = document.getElementById(isC1 ? 'sup1Log'        : 'sup2Log');
   const statusEl   = document.getElementById(isC1 ? 'sup1Status'     : 'sup2Status');
@@ -223,6 +231,7 @@ function applyCustomerSnapshot(customerId, data) {
 
 // Builds the complete state snapshot the supervisor needs to mirror the customer UI.
 function buildFullSnapshot(extra = {}) {
+  const myPeerId = (typeof window.getMyPeerId === 'function') ? window.getMyPeerId() : null;
   return Object.assign({
     accounts:     S.accounts,
     transactions: S.transactions  || [],
@@ -230,7 +239,8 @@ function buildFullSnapshot(extra = {}) {
     txSeq:        S.txSeq         || 0,
     totalDebit:   S.totalDebit    || 0,
     statusLabel:  (typeof DOM !== 'undefined' && DOM.statusLabel)
-                    ? DOM.statusLabel.textContent : ''
+                    ? DOM.statusLabel.textContent : '',
+    peerId:       myPeerId
   }, extra || {});
 }
 
@@ -599,5 +609,9 @@ if (typeof window !== 'undefined') {
   window.syncRoleGateStatus = syncRoleGateStatus;
   window.getCustomerLockStatus = getCustomerLockStatus;
   window.applyCustomerSnapshot = applyCustomerSnapshot;
-    window.clearCustomerLog = clearCustomerLog;   window.refreshCustomerLockTimestamp = refreshCustomerLockTimestamp;   // ── Release lock on tab close / navigation ──────────────────────   function _releaseActiveSessionLock() {     const roleId = window.S && (S.customerId || S.role);     if (roleId && typeof releaseCustomerLock === 'function') {       releaseCustomerLock(roleId).catch(() => {});     }   }   window.addEventListener('beforeunload', _releaseActiveSessionLock);   document.addEventListener('visibilitychange', function() {     if (document.visibilityState === 'hidden') _releaseActiveSessionLock();   });
+  window.clearCustomerLog = clearCustomerLog;
+  window.refreshCustomerLockTimestamp = refreshCustomerLockTimestamp;
+  window.getCustomerPeerId = function(customerId) {
+    return _customerPeerIds[customerId] || null;
+  };   // ── Release lock on tab close / navigation ──────────────────────   function _releaseActiveSessionLock() {     const roleId = window.S && (S.customerId || S.role);     if (roleId && typeof releaseCustomerLock === 'function') {       releaseCustomerLock(roleId).catch(() => {});     }   }   window.addEventListener('beforeunload', _releaseActiveSessionLock);   document.addEventListener('visibilitychange', function() {     if (document.visibilityState === 'hidden') _releaseActiveSessionLock();   });
 }
