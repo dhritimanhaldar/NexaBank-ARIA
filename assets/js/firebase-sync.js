@@ -191,6 +191,23 @@ function applyCustomerSnapshot(customerId, data) {
       '&nbsp;&nbsp;<span>Current: <strong>' + fmt(data.accounts.current) + '</strong></span>';
   }
 
+  // ── Talk to Customer button ─────────────────────────────────────
+  if (S.role === 'supervisor') {
+    const columnEl = document.querySelector(isC1 ? '.supervisor-column:first-child' : '.supervisor-column:last-child');
+    if (columnEl) {
+      let talkBtn = columnEl.querySelector('.talk-to-customer-btn');
+      if (!talkBtn) {
+        talkBtn = document.createElement('button');
+        talkBtn.className = 'talk-to-customer-btn';
+        talkBtn.type = 'button';
+        talkBtn.textContent = 'Talk to Customer';
+        columnEl.insertBefore(talkBtn, balEl.nextSibling);
+      }
+      talkBtn.dataset.peerId = data.peerId || '';
+      talkBtn.disabled = !data.peerId;
+    }
+  }
+
   // ── Interaction log ─────────────────────────────────────────────
   if (logEl && data.logEntries) {
     logEl.innerHTML = '';
@@ -613,5 +630,27 @@ if (typeof window !== 'undefined') {
   window.refreshCustomerLockTimestamp = refreshCustomerLockTimestamp;
   window.getCustomerPeerId = function(customerId) {
     return _customerPeerIds[customerId] || null;
-  };   // ── Release lock on tab close / navigation ──────────────────────   function _releaseActiveSessionLock() {     const roleId = window.S && (S.customerId || S.role);     if (roleId && typeof releaseCustomerLock === 'function') {       releaseCustomerLock(roleId).catch(() => {});     }   }   window.addEventListener('beforeunload', _releaseActiveSessionLock);   document.addEventListener('visibilitychange', function() {     if (document.visibilityState === 'hidden') _releaseActiveSessionLock();   });
+  };
+
+  // ── Talk to Customer button click handling ──────────────────────
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList.contains('talk-to-customer-btn')) {
+      const peerId = e.target.dataset.peerId;
+      if (!peerId) {
+        console.warn('[supervisor] Talk to Customer button clicked but no peerId available');
+        return;
+      }
+      try {
+        if (window.NexaPeerCalling && typeof window.NexaPeerCalling.callCustomerPeer === 'function') {
+          window.NexaPeerCalling.callCustomerPeer(peerId);
+        } else {
+          console.error('[supervisor] NexaPeerCalling.callCustomerPeer not available');
+        }
+      } catch (err) {
+        console.error('[supervisor] Failed to initiate call:', err);
+      }
+    }
+  });
+
+   // ── Release lock on tab close / navigation ──────────────────────   function _releaseActiveSessionLock() {     const roleId = window.S && (S.customerId || S.role);     if (roleId && typeof releaseCustomerLock === 'function') {       releaseCustomerLock(roleId).catch(() => {});     }   }   window.addEventListener('beforeunload', _releaseActiveSessionLock);   document.addEventListener('visibilitychange', function() {     if (document.visibilityState === 'hidden') _releaseActiveSessionLock();   });
 }

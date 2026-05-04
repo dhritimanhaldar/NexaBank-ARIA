@@ -222,3 +222,18 @@ textarea:focus {
 .talk-to-customer-btn.active-call:hover:not(:disabled) {
   background: #c9302c;
 }
+
+.talk-to-customer-btn {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid #0b6bcb;
+  border-radius: 8px;
+  background: #0b6bcb;
+  color: #fff;
+  cursor: pointer;
+}
+
+.talk-to-customer-btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
