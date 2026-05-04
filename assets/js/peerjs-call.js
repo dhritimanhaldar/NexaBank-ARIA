@@ -78,18 +78,32 @@
 
   function upsertOwnPeerIdIntoSharedState() {
     const peerId = getMyPeerId();
+    const role = getRole();
 
     if (window.S) {
-      if (window.S.customerSession && getRole() === 'customer') {
+      if (role === 'customer') {
+        if (!window.S.customerSession || typeof window.S.customerSession !== 'object') {
+          window.S.customerSession = {};
+        }
         window.S.customerSession.peerId = peerId;
-      }
-      if (window.S.currentCustomer && getRole() === 'customer') {
+
+        if (!window.S.currentCustomer || typeof window.S.currentCustomer !== 'object') {
+          window.S.currentCustomer = {};
+        }
         window.S.currentCustomer.peerId = peerId;
+
+        if (window.S.session && typeof window.S.session === 'object') {
+          window.S.session.peerId = peerId;
+        }
+      }
+
+      if (role === 'supervisor' && window.S.supervisorSession && typeof window.S.supervisorSession === 'object') {
+        window.S.supervisorSession.peerId = peerId;
       }
     }
 
     document.dispatchEvent(new CustomEvent('nexa:peer-id-ready', {
-      detail: { peerId, role: getRole() }
+      detail: { peerId, role }
     }));
   }
 
@@ -112,6 +126,9 @@
     peerInstance.on('open', () => {
       getPeerState().connected = true;
       upsertOwnPeerIdIntoSharedState();
+      document.dispatchEvent(new CustomEvent('nexa:peer-presence-updated', {
+        detail: { peerId: myPeerId, role: getRole() }
+      }));
       console.log('[peerjs] connected as', myPeerId);
     });
 

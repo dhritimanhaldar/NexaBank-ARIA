@@ -204,7 +204,7 @@ function applyCustomerSnapshot(customerId, data) {
         columnEl.insertBefore(talkBtn, balEl.nextSibling);
       }
       talkBtn.dataset.peerId = data.peerId || '';
-      talkBtn.disabled = !data.peerId;
+      talkBtn.disabled = !(_customerOnlineState[customerId] && data.peerId);
     }
   }
 
@@ -648,6 +648,28 @@ if (typeof window !== 'undefined') {
         }
       } catch (err) {
         console.error('[supervisor] Failed to initiate call:', err);
+      }
+    }
+  });
+
+  // ── Listen for peer presence updates ──────────────────────────────
+  document.addEventListener('nexa:peer-presence-updated', (e) => {
+    if (S.role !== 'supervisor') return;
+    const { peerId, role } = e.detail;
+    if (role !== 'customer') return;
+
+    // Find which customer this peerId belongs to
+    const customerId = Object.keys(_customerPeerIds).find(id => _customerPeerIds[id] === peerId);
+    if (!customerId) return;
+
+    // Update the button state for this customer
+    const isC1 = customerId === 'customer1';
+    const columnEl = document.querySelector(isC1 ? '.supervisor-column:first-child' : '.supervisor-column:last-child');
+    if (columnEl) {
+      const talkBtn = columnEl.querySelector('.talk-to-customer-btn');
+      if (talkBtn) {
+        talkBtn.dataset.peerId = peerId;
+        talkBtn.disabled = !(_customerOnlineState[customerId] && peerId);
       }
     }
   });
