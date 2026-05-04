@@ -12,12 +12,16 @@ const PRESENCE_STALE_MS = 15000;
 const SUPERVISOR_PRESENCE_MONITOR_MS = 3000;
 let supervisorPresenceMonitorId = null;
 let activeSupervisorCallCustomerId = null;
+let customerCallTranscriptSubscribed = false;
+let customerCallTranscriptUnsubscribe = null;
+let customerCallTranscriptStartedAt = 0;
 // Tracks previous online/offline state per customer for supervisor status log entries
 const _customerOnlineState = {};
 // Tracks peer IDs for each customer session (used by supervisor for P2P calls)
 const _customerPeerIds = {};
 // Tracks last received customer snapshots so supervisor can age out stale tabs.
 const _customerSnapshots = {};
+const _processedRemoteLogEntryIds = {};
 
 function getCustomerPeerIdForCall(item) {
   if (!item || typeof item !== 'object') return '';
@@ -56,6 +60,17 @@ function setActiveSupervisorCallCustomer(customerId) {
     }
   }));
   renderSupervisorCustomers();
+}
+
+function makeLogEntry(type, who, msg, params) {
+  return {
+    id: 'log-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+    time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    type,
+    who,
+    msg,
+    params: params || null
+  };
 }
 
 function isCustomerOnlineForPeerCall(item) {
@@ -244,6 +259,9 @@ function getLocalChannel() {
 function applyCustomerSnapshot(customerId, data) {
   if (!data) return;
   data = normalizeSyncedCustomerState(data);
+  const previousPeerId = _customerPeerIds[customerId] || null;
+  const incomingPeerId = data.peerId || null;
+  const peerIdChanged = !!(previousPeerId && incomingPeerId && previousPeerId !== incomingPeerId);
 
   // Store peerId for this customer so supervisor can initiate calls
   if (data.peerId) {
@@ -295,6 +313,10 @@ function applyCustomerSnapshot(customerId, data) {
       }
     }
     _customerOnlineState[customerId] = isNowOnline;
+  }
+
+  if ((!isCustomerOnlineForPeerCall(data) || peerIdChanged) && isSupervisorCallActiveFor(customerId)) {
+    setActiveSupervisorCallCustomer(null);
   }
 
   // ── Balances ────────────────────────────────────────────────────
@@ -414,21 +436,130 @@ function renderSupervisorCustomers() {
 }
 
 function appendSupervisorInterventionLog(customerId) {
+  appendLogEntryToSupervisorColumn(
+    customerId,
+    makeLogEntry('action', 'ACTION', 'Supervisor decided to intervene and started a live call.')
+  );
+}
+
+function appendLogEntryToSupervisorColumn(customerId, entry) {
   const isC1 = customerId === 'customer1';
   const logEl = document.getElementById(isC1 ? 'sup1Log' : 'sup2Log');
   if (!logEl) return;
 
-  const ts = new Date().toLocaleTimeString('en-IN', { hour12: false });
   const div = document.createElement('div');
-  div.className = 'entry action sup-intervention-event';
+  const type = entry.type || 'system';
+  const icons = { user: '👤', aria: '🤖', action: '⚡', system: '⚙', error: '✕' };
+  div.className = 'entry ' + type;
   div.innerHTML =
-    '<div class="eicon action">⚡</div>' +
+    '<div class="eicon ' + type + '">' + (icons[type] || '•') + '</div>' +
     '<div class="ebody"><div class="emeta">' +
-    '<span class="ewho action">ACTION</span>' +
-    '<span class="etime">' + ts + '</span></div>' +
-    '<div class="emsg">Supervisor decided to intervene and started a live call.</div></div>';
+    '<span class="ewho ' + type + '">' + Helpers.esc(entry.who || 'SYSTEM') + '</span>' +
+    '<span class="etime">' + Helpers.esc(entry.time || '') + '</span></div>' +
+    '<div class="emsg">' + Helpers.esc(entry.msg || '') + '</div>' +
+    (entry.params ? '<div class="eparams">' + Helpers.esc(entry.params) + '</div>' : '') +
+    '</div>';
   logEl.appendChild(div);
   logEl.scrollTop = logEl.scrollHeight;
+}
+
+function appendSupervisorTranscriptToCustomerLog(entry) {
+  if (!entry || S.role !== 'customer') return;
+  if (entry.id && _processedRemoteLogEntryIds[entry.id]) return;
+  if (entry.id) _processedRemoteLogEntryIds[entry.id] = true;
+
+  if (typeof addLog === 'function') {
+    addLog(entry.type || 'user', entry.who || 'Supervisor', entry.msg || '', entry.params || null);
+  }
+}
+
+function publishSupervisorCallTranscript(customerId, text) {
+  const cleaned = String(text || '').trim();
+  if (!cleaned) return false;
+
+  const safeCustomerId = String(customerId || '').trim();
+  if (!safeCustomerId) return false;
+
+  const entry = makeLogEntry('user', 'Supervisor', cleaned, 'Live call transcript');
+  appendLogEntryToSupervisorColumn(safeCustomerId, entry);
+
+  try {
+    const bc = getLocalChannel();
+    if (bc) {
+      bc.postMessage({
+        type: 'nexabank_call_transcript',
+        customerId: safeCustomerId,
+        entry
+      });
+    }
+  } catch (bcErr) {
+    console.warn('[NexaBank] BroadcastChannel call transcript failed:', bcErr);
+  }
+
+  if (canUseFirebaseSync() && firestoreDb) {
+    try {
+      firestoreDb.collection('channels').doc(safeCustomerId).collection('events').add({
+        type: 'supervisor_transcript',
+        data: { entry },
+        source: 'supervisor',
+        timestamp: Date.now()
+      }).catch(function(err) {
+        console.warn('[NexaBank] publish supervisor transcript failed:', err);
+      });
+    } catch (err) {
+      console.warn('[NexaBank] publish supervisor transcript failed:', err);
+    }
+  }
+
+  return true;
+}
+
+function handleCallTranscriptMessage(message) {
+  if (!message || message.type !== 'nexabank_call_transcript') return;
+  if (S.role !== 'customer') return;
+  if (String(message.customerId || '') !== String(S.customerId || '')) return;
+  appendSupervisorTranscriptToCustomerLog(message.entry);
+}
+
+function ensureCustomerCallTranscriptSubscription() {
+  if (!window.S || S.role !== 'customer' || customerCallTranscriptSubscribed) return;
+  customerCallTranscriptSubscribed = true;
+  customerCallTranscriptStartedAt = Date.now();
+
+  try {
+    const bc = getLocalChannel();
+    if (bc && typeof bc.addEventListener === 'function') {
+      bc.addEventListener('message', function(event) {
+        handleCallTranscriptMessage(event.data);
+      });
+    }
+  } catch (bcErr) {
+    console.warn('[NexaBank] BroadcastChannel customer transcript listener failed:', bcErr);
+  }
+
+  if (!canUseFirebaseSync() || !firestoreDb || !S.customerId) return;
+
+  try {
+    const eventsRef = firestoreDb.collection('channels').doc(S.customerId).collection('events');
+    customerCallTranscriptUnsubscribe = eventsRef.onSnapshot(function(snapshot) {
+      snapshot.docChanges().forEach(function(change) {
+        if (change.type !== 'added') return;
+        const eventId = change.doc.id;
+        if (_processedRemoteLogEntryIds[eventId]) return;
+        _processedRemoteLogEntryIds[eventId] = true;
+
+        const eventData = change.doc.data() || {};
+        if (Number(eventData.timestamp || 0) < customerCallTranscriptStartedAt - 5000) return;
+        if (eventData.type !== 'supervisor_transcript') return;
+
+        appendSupervisorTranscriptToCustomerLog(eventData.data?.entry);
+      });
+    }, function(err) {
+      console.warn('[NexaBank] customer transcript event listener failed:', err);
+    });
+  } catch (err) {
+    console.warn('[NexaBank] customer transcript subscription failed:', err);
+  }
 }
 
 function refreshSupervisorPresenceFromSnapshots() {
@@ -767,6 +898,7 @@ function syncRoleGateStatus(){
 async function publishLiveSnapshot(payload = {}) {
   // Only the customer tab should ever publish state — supervisor is read-only.
   if (S.role && S.role !== 'customer') return false;
+  ensureCustomerCallTranscriptSubscription();
 
   const channelId = S.customerId || 'global-live-session';
   const isOfflinePayload = hasExplicitOfflineSignal(payload);
@@ -855,6 +987,7 @@ if (typeof window !== 'undefined') {
   window.initFirebaseSync = initFirebaseSync;
   window.publishLiveSnapshot = publishLiveSnapshot;
   window.publishOfflinePresence = publishOfflinePresence;
+  window.publishSupervisorCallTranscript = publishSupervisorCallTranscript;
   window.scheduledPublish = scheduledPublish;
   window.buildFullSnapshot = buildFullSnapshot;
   window.startSessionHeartbeat = startSessionHeartbeat;

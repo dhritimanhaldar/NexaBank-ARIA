@@ -7,6 +7,13 @@ let supervisorState = {
   },
   activeCallCustomerId: null
 };
+let supervisorSpeechRecognition = null;
+let supervisorSpeechRestart = false;
+let supervisorTranscriptCustomerId = null;
+
+function hasMeaningfulSupervisorTranscript(text) {
+  return typeof text === 'string' && text.trim().replace(/\s+/g, ' ').length >= 2;
+}
 
 function getCustomerPeerIdForCall(item) {
   if (!item || typeof item !== 'object') return '';
@@ -135,6 +142,12 @@ function setCallingState(isCalling, customerId) {
     btn.classList.toggle('active-call', isActiveButton);
   });
   updateTalkButtonStates();
+
+  if (supervisorState.activeCallCustomerId) {
+    startSupervisorCallTranscription(supervisorState.activeCallCustomerId);
+  } else {
+    stopSupervisorCallTranscription();
+  }
 }
 
 function updateCustomerSession(customerId, data) {
@@ -144,6 +157,9 @@ function updateCustomerSession(customerId, data) {
 
   const session = supervisorState.customerSessions[customerId];
   const isOffline = hasCustomerOfflineSignal(data);
+  const previousPeerId = session.peerId || null;
+  const incomingPeerId = data.peerId || null;
+  const peerIdChanged = !!(previousPeerId && incomingPeerId && previousPeerId !== incomingPeerId);
 
   // Update status based on heartbeat
   if (data.heartbeatAt) {
@@ -157,6 +173,10 @@ function updateCustomerSession(customerId, data) {
     ? false
     : (data.online === true || data.status === 'online' || data.connected === true || session.online === true);
   session.status = session.online ? 'online' : 'offline';
+
+  if ((!session.online || peerIdChanged) && supervisorState.activeCallCustomerId === customerId) {
+    setCallingState(false);
+  }
 
   // Store peerId for calls
   if (data.peerId) {
@@ -199,6 +219,84 @@ function getCustomerIdForButton(button) {
   return columns.indexOf(column) === 1 ? 'customer2' : 'customer1';
 }
 
+function startSupervisorCallTranscription(customerId) {
+  if (!window.S || S.role !== 'supervisor') return;
+  if (supervisorSpeechRecognition && supervisorTranscriptCustomerId === customerId) return;
+
+  stopSupervisorCallTranscription();
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    console.warn('[supervisor] SpeechRecognition unavailable for live call transcript');
+    return;
+  }
+
+  supervisorTranscriptCustomerId = customerId;
+  supervisorSpeechRestart = true;
+
+  const rec = new SR();
+  supervisorSpeechRecognition = rec;
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.lang = 'en-IN';
+  rec.maxAlternatives = 1;
+
+  rec.onresult = function(event) {
+    let finalText = '';
+    for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      const result = event.results[i];
+      if (!result || !result[0] || !result.isFinal) continue;
+      finalText = (finalText + ' ' + (result[0].transcript || '')).trim();
+    }
+
+    if (!hasMeaningfulSupervisorTranscript(finalText)) return;
+    if (typeof window.publishSupervisorCallTranscript === 'function') {
+      window.publishSupervisorCallTranscript(customerId, finalText);
+    }
+  };
+
+  rec.onerror = function(event) {
+    const error = event?.error || event;
+    if (error !== 'no-speech') {
+      console.warn('[supervisor] call transcript recognition error:', error);
+    }
+  };
+
+  rec.onend = function() {
+    supervisorSpeechRecognition = null;
+    if (supervisorSpeechRestart && supervisorState.activeCallCustomerId === customerId) {
+      setTimeout(function() {
+        if (supervisorSpeechRestart && supervisorState.activeCallCustomerId === customerId) {
+          startSupervisorCallTranscription(customerId);
+        }
+      }, 400);
+    }
+  };
+
+  try {
+    rec.start();
+  } catch (err) {
+    supervisorSpeechRecognition = null;
+    console.warn('[supervisor] call transcript recognition start failed:', err);
+  }
+}
+
+function stopSupervisorCallTranscription() {
+  supervisorSpeechRestart = false;
+  supervisorTranscriptCustomerId = null;
+
+  if (!supervisorSpeechRecognition) return;
+  const rec = supervisorSpeechRecognition;
+  supervisorSpeechRecognition = null;
+  rec.onend = null;
+
+  try {
+    rec.abort();
+  } catch (err) {
+    console.warn('[supervisor] call transcript recognition stop failed:', err);
+  }
+}
+
 // Hook into applyCustomerSnapshot to update supervisor state
 const originalApplyCustomerSnapshot = window.applyCustomerSnapshot;
 if (typeof originalApplyCustomerSnapshot === 'function') {
@@ -221,6 +319,11 @@ document.addEventListener('nexa:supervisor-call-state-changed', function(event) 
   const detail = event.detail || {};
   supervisorState.activeCallCustomerId = detail.active ? detail.customerId : null;
   updateTalkButtonStates();
+  if (supervisorState.activeCallCustomerId) {
+    startSupervisorCallTranscription(supervisorState.activeCallCustomerId);
+  } else {
+    stopSupervisorCallTranscription();
+  }
 });
 
 // Export functions to window
